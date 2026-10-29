@@ -1,5 +1,7 @@
 // 어항 일지 service worker: opens instantly from the device copy, refreshes files in the background.
-const VERSION = 'aq-2026-10-28-1';
+const BETA = self.location.pathname.includes('/beta/');
+const PRE = BETA ? 'aqb-' : 'aq-';
+const VERSION = PRE + '2026-10-29-2';
 const EXT = VERSION + '-ext';
 const SHELL = ['./', './index.html', './backend.js', './manifest.webmanifest',
   './icons/icon-192.png', './icons/icon-512.png', './icons/icon-180.png'];
@@ -8,7 +10,7 @@ self.addEventListener('install', e => {
   e.waitUntil(caches.open(VERSION).then(c => c.addAll(SHELL)).then(() => self.skipWaiting()));
 });
 self.addEventListener('activate', e => {
-  e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k.startsWith('aq-') && k !== VERSION && k !== EXT).map(k => caches.delete(k)))).then(() => self.clients.claim()));
+  e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k.startsWith(PRE) && k !== VERSION && k !== EXT).map(k => caches.delete(k)))).then(() => self.clients.claim()));
 });
 
 async function staleWhileRevalidate(req, key) {
@@ -35,6 +37,7 @@ self.addEventListener('fetch', e => {
   const req = e.request; if (req.method !== 'GET') return;
   const url = new URL(req.url);
   if (url.origin === location.origin) {
+    if (!BETA && url.pathname.startsWith(new URL('./beta/', self.location).pathname)) return;  // the beta has its own worker
     if (url.pathname.endsWith('/config.js')) { e.respondWith(networkFirst(req)); return; }
     if (req.mode === 'navigate') { e.respondWith(staleWhileRevalidate(req, './index.html')); return; }
     e.respondWith(staleWhileRevalidate(req)); return;
