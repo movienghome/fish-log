@@ -132,6 +132,7 @@ h2.sec{font-family:var(--f-display);font-size:1.2rem;margin:0;line-height:1.3}
 .fcs{display:flex;flex-wrap:wrap;gap:5px}
 .fc{display:inline-flex;gap:5px;align-items:baseline;background:var(--sunk);border-radius:6px;padding:.1rem .5rem;font-size:.9rem}
 .fc .k{font-size:.75rem;color:var(--muted)}
+.fc.ok{background:color-mix(in srgb,var(--ok) 12%,var(--surface));color:var(--ok)}
 .fc.warn{background:color-mix(in srgb,var(--warn) 16%,var(--surface));color:var(--warn)}
 .fc.bad{background:color-mix(in srgb,var(--bad) 16%,var(--surface));color:var(--bad);font-weight:600}
 .dtable{width:100%;border-collapse:collapse;font-size:.9rem}
@@ -336,6 +337,7 @@ details.kit summary{cursor:pointer;font-weight:600;font-size:.9rem;color:var(--m
 .pgrid.c{grid-template-columns:repeat(auto-fill,minmax(5rem,1fr));gap:5px}
 .pt{border-radius:10px;padding:7px 9px;background:var(--sunk);display:grid;gap:0;border:1.5px solid transparent;min-width:0;text-align:left}
 .pt .k{font-size:.75rem;color:var(--muted);font-weight:600}
+button.pt{cursor:pointer;font:inherit;color:inherit}button.pt:hover{outline:1px solid var(--line)}
 .pt .v{font-family:var(--f-mono);font-size:1.2rem;font-weight:500;font-variant-numeric:tabular-nums;line-height:1.3;white-space:nowrap}
 .pt .v small{font-size:.65rem;color:var(--muted);font-weight:400;margin-left:2px}
 .pt .s{font-size:.75rem;font-weight:600;display:flex;gap:4px;align-items:baseline;flex-wrap:wrap}
@@ -498,7 +500,7 @@ const PALETTES = {
   sand:{name:"모래", light:{bg:"#f1eee8",surface:"#fffdf9",sunk:"#e8e3da",ink:"#2c241b",muted:"#6d6255",line:"#ddd5c8",accent:"#9a5b2e"}, dark:{bg:"#16120e",surface:"#201b15",sunk:"#1a1611",ink:"#eee6da",muted:"#ab9f8f",line:"#3a3127",accent:"#e0a46c"}},
   ink:{name:"먹", light:{bg:"#f3f3f1",surface:"#ffffff",sunk:"#e9e9e6",ink:"#1a1a1a",muted:"#62625f",line:"#d8d8d4",accent:"#1a1a1a"}, dark:{bg:"#0f0f0f",surface:"#1a1a1a",sunk:"#141414",ink:"#ececec",muted:"#a0a09c",line:"#2f2f2f",accent:"#ececec"}}
 };
-const SEMANTIC = {light:{ok:"#2c8a4b",warn:"#b26510",bad:"#b3362f"}, dark:{ok:"#5fc27f",warn:"#e2a04a",bad:"#ef7b72"}};
+const SEMANTIC = {light:{ok:"#2563b5",warn:"#a86b00",bad:"#c0322b"}, dark:{ok:"#7cb2f7",warn:"#e8b14a",bad:"#f07a70"}};
 const DEFAULT_SETTINGS = {mode:"system", palette:"moss", accent:"", fontScale:1, kit:false, params:Object.fromEntries(PARAMS.map(p => [p.k, true])), weekStart:0, calMarks:"emoji", logSort:"new", waterRange:"91", waterFrom:"", aiAuto:true,
   tabs:TAB_DEFS.map(({k}) => ({k, on:true})), home:HOME_DEFS.map(({k}) => ({k, on:true})), types:TYPE_DEFS.map(({k,emoji,color}) => ({k, on:true, emoji, color})), fields:{}};
 
@@ -688,7 +690,7 @@ function fieldChips(l){
     const val = f.kind === "multi" ? (Array.isArray(v) ? v.join(", ") : v) : f.kind === "scale5" ? `${v}/5` : f.kind === "pct" ? `${v}%` : f.kind === "num" ? `${v}${f.unit || ""}` : f.kind === "tank" ? tankName(v) : v;
     out.push(`<span class="fc ${st === "ok" ? "" : st}"><span class="k">${esc(f.label)}</span>${esc(val)}</span>`);
   });
-  if (l.type === "water") PARAMS.forEach(p => { const n = num(l[p.k]); if (n != null) { const s = pStatus(p, n); out.push(`<span class="fc ${s === "ok" ? "" : s}"><span class="k">${p.label}</span>${n}${p.unit}</span>`); } });
+  if (l.type === "water") PARAMS.forEach(p => { const n = num(l[p.k]); if (n != null) { const s = pStatus(p, n); out.push(`<span class="fc ${s}"><span class="k">${p.label}</span>${n}${p.unit} ${({ok:"✓",warn:"▲",bad:"✕"})[s]}</span>`); } });
   return out.join("");
 }
 function recordEmoji(l){
@@ -884,7 +886,7 @@ function tankCard(t){
       return `<button class="hero-photo" data-act="photo-open" data-log="${esc(l.id)}" data-i="0"><img src="${esc(l.photos[0].url)}" alt="${esc(t.name)} 최근 사진" loading="lazy"><span>${fmtDay(l.date)} · ${ago(l.date)}</span></button>`; }
   };
   const rows = {
-    water: () => { if (!typeOf("water").on && !lastOf(t.id,"water")) return ""; const w = lastOf(t.id, "water"); const pp = paramPanel(t.id, true); return dt(T("water"), "water") + (pp ? `<dd style="grid-column:1/-1;margin:0 0 4px">${pp}</dd>` : "") + (w ? dd(`<span class="pill ${recordStatus(w)||""}">${esc(summary(w) || "확인함")}</span> <span class="muted small">${ago(w.date)}</span>`, `data-act="qe" data-type="water" data-tank-id="${tid}"`) : addDd("water")); },
+    water: () => { if (!typeOf("water").on && !lastOf(t.id,"water")) return ""; const w = lastOf(t.id, "water"); const pp = paramPanel(t.id, true); return dt(T("water"), "water") + (w ? dd(waterPill(w), `data-act="qe" data-type="water" data-tank-id="${tid}"`) : addDd("water")) + (pp ? `<dd style="grid-column:1/-1;margin:0 0 6px">${pp}</dd>` : ""); },
     condition: () => { const l = lastOf(t.id, "condition"); if (!l) return typeOf("condition").on ? dt(T("condition"), "condition") + addDd("condition") : "";
       const inner = `${l.activity ? `활동 ${dots(l.activity)} ` : ""}${l.feeding ? ` 먹이 ${dots(l.feeding)} ` : ""}${(l.symptoms||[]).length ? `<span style="color:var(--bad);font-weight:600">${esc(l.symptoms.join(", "))}</span> ` : ""}${!l.activity && !l.feeding && !(l.symptoms||[]).length ? esc(l.memo || summary(l) || "관찰") : ""} <span class="muted small">${ago(l.date)}</span>`;
       return dt(T("condition"), "condition") + dd(inner, `data-act="qe" data-type="condition" data-tank-id="${tid}"`); },
@@ -920,12 +922,23 @@ function tankCard(t){
       <div class="setrow"><span class="t"><b class="small">'전체' 보기에 이 어항 포함</b><small>끄면 위 어항 이름을 눌렀을 때만 보여요</small></span>${toggle("tank-all", !t.hideInAll, "전체 보기에 포함", `data-tank-id="${tid}"`)}</div></div>` : ""}
     ${body}</section>`;
 }
+const noParams = l => { const x = {...l}; PARAMS.forEach(p => delete x[p.k]); return x; };
+function waterPill(w){
+  const st = recordStatus(w), base = summary(noParams(w));
+  const off = PARAMS.filter(p => { const n = num(w[p.k]); return n != null && pStatus(p, n) !== "ok"; }).map(p => p.label);
+  const measured = PARAMS.some(p => num(w[p.k]) != null);
+  const status = measured ? (off.length ? `${ST_MARK[worst(PARAMS.map(p => pStatus(p, num(w[p.k]))))]}: ${off.join(", ")}` : "✓ 측정값 모두 좋음") : "";
+  return `<span class="pill ${st||""}">${esc([base, status].filter(Boolean).join(" · ") || "확인함")}</span> <span class="muted small">${ago(w.date)}</span>`;
+}
+function paramChips(l){
+  return PARAMS.filter(p => num(l[p.k]) != null).map(p => { const n = num(l[p.k]), st = pStatus(p, n); return `<span class="fc ${st}"><span class="k">${p.label}</span>${n}<span class="k">${esc(p.unit)}</span> ${({ok:"✓",warn:"▲",bad:"✕"})[st]}</span>`; }).join("");
+}
 function entryHtml(l, opt = {}){
-  const T = typeOf(l.type), sum = summary(l), st = recordStatus(l);
+  const T = typeOf(l.type), hasP = l.type === "water" && PARAMS.some(p => num(l[p.k]) != null), sum = hasP ? summary(noParams(l)) : summary(l), st = recordStatus(l);
   const sel = state.selecting && state.sel.has(l.id);
   return `<button class="entry ${sel?"sel":""}" data-act="${state.selecting ? "sel-toggle" : "edit-log"}" data-id="${esc(l.id)}" ${state.selecting ? `aria-pressed="${sel}"` : ""}><span class="ic" style="background:${tint(T.color,24)}" aria-hidden="true">${sel ? "✓" : esc(recordEmoji(l))}</span><span class="body">
-    <span class="t"><span class="lb" style="color:${T.color}">${esc(T.label)}</span>${opt.tank && state.tank==="all" ? `<span class="muted">${esc(tankLabel(l.tankId))}</span>` : ""}${opt.date ? `<span class="muted">${ago(l.date)}</span>` : ""}${l.time ? `<span class="muted mono">${esc(l.time)}</span>` : ""}${st && st !== "ok" ? `<span class="st ${st}">${ST_LABEL[st]}</span>` : ""}</span>
-    ${sum ? `<span class="sum">${esc(sum)}</span>` : ""}${l.memo ? `<span class="memo">${esc(l.memo)}</span>` : ""}${aiLine(l)}
+    <span class="t"><span class="lb" style="color:${T.color}">${esc(T.label)}</span>${opt.tank && state.tank==="all" ? `<span class="muted">${esc(tankLabel(l.tankId))}</span>` : ""}${opt.date ? `<span class="muted">${ago(l.date)}</span>` : ""}${l.time ? `<span class="muted mono">${esc(l.time)}</span>` : ""}${st ? `<span class="st ${st}">${({ok:"✓",warn:"▲",bad:"✕"})[st]} ${ST_LABEL[st]}</span>` : ""}</span>
+    ${sum ? `<span class="sum">${esc(sum)}</span>` : ""}${hasP ? `<span class="fcs" style="margin-top:2px">${paramChips(l)}</span>` : ""}${l.memo ? `<span class="memo">${esc(l.memo)}</span>` : ""}${aiLine(l)}
     ${(l.photos||[]).length ? `<span class="thumbs">${l.photos.slice(0,4).map((p,i) => `<img src="${esc(p.url)}" alt="사진" loading="lazy" data-log="${esc(l.id)}" data-i="${i}">`).join("")}${l.photos.length > 4 ? `<span class="muted small" style="align-self:center">+${l.photos.length-4}</span>` : ""}</span>` : ""}</span></button>`;
 }
 
@@ -1094,6 +1107,33 @@ function heatBlock(t, from, compact){
     ${last && !compact ? `<div class="pills"><button class="pill ${recordStatus(last)||""}" data-act="qe" data-type="water" data-tank-id="${esc(t.id)}" style="background:none;cursor:pointer">${esc(summary(last) || "확인함")} ✎</button><span class="muted small" style="align-self:center">${ago(last.date)}</span></div>` : ""}</div>`;
 }
 const heatLegend = () => `<div class="legend"><span><i class="lg" style="background:var(--ok)"></i>좋음</span><span><i class="lg" style="background:var(--warn)"></i>주의</span><span><i class="lg" style="background:var(--bad)"></i>나쁨</span><span><i class="lg" style="background:var(--none)"></i>기록 없음</span><span><i class="lg wcl"></i>환수한 날</span></div>`;
+const PARAM_INFO = {
+  temp:{what:"물의 온도예요. 열대어는 체온이 물 온도를 따라가서, 온도가 대사와 면역을 정해요.", low:"낮으면 먹이 반응이 줄고 면역이 떨어져 흰점병이 잘 생겨요.", high:"높으면 물속 산소가 줄어 수면 호흡이 늘고, 코리도라스처럼 서늘한 물을 좋아하는 종이 힘들어해요.", how:["히터 설정 온도를 고정하고, 계절이 바뀔 때 한 번씩 확인해요.","환수할 새 물은 어항 물과 온도 차이를 2°C 안쪽으로 맞춰요.","여름에는 뚜껑을 열거나 쿨링팬으로 내려요."]},
+  ph:{what:"물이 산성인지 알칼리성인지 나타내요. 7이 중성, 낮을수록 산성이에요. 네온·카디널 테트라와 코리도라스는 약산성(6.0–7.0)에서 잘 지내요.", low:"너무 낮아지면(6.0 아래) 여과 박테리아가 약해지고, 빠르게 떨어지면 물고기가 스트레스를 받아요. KH가 낮은 물에서 환수를 오래 건너뛰면 서서히 떨어져요.", high:"높아지는 건 보통 석회질 돌(청룡석 등)이나 산호사 때문이에요. 7.5를 넘으면 연한 물 종에게는 부담이에요.", how:["숫자를 맞추는 것보다 '안정'이 중요해요. 하루에 0.3 넘게 바뀌지 않게 해요.","매주 정해진 양을 환수하면 대부분 저절로 안정돼요.","낮아지는 추세면 환수 간격을 줄이고, KH도 같이 봐요."]},
+  nh3:{what:"배설물·남은 먹이·죽은 생물이 썩으면서 나오는 독성 물질이에요. 여과 박테리아가 처리해서 평소에는 0이어야 해요.", low:"0이 정상이에요.", high:"조금이라도 나오면 아가미가 상하고, 물고기가 수면에서 숨을 쉬거나 숨어 있어요. 여과가 덜 자랐거나, 먹이가 많거나, 사체가 있다는 신호예요.", how:["검출되면 바로 30–50% 환수해요.","먹이를 줄이고 남은 먹이와 사체를 찾아 치워요.","여과재는 수돗물이 아니라 빼낸 어항 물로만 헹궈요(박테리아 보호)."]},
+  no2:{what:"박테리아가 암모니아를 분해하는 중간에 생기는 물질이에요. 이것도 평소에는 0이어야 해요.", low:"0이 정상이에요. 이 시험지에서 아질산이 0이면 여과가 제대로 돈다는 뜻이에요.", high:"피가 산소를 못 나르게 막아서, 물고기가 숨이 차 보이고 아가미가 갈색을 띠어요. 새 어항, 여과재를 한꺼번에 바꾼 직후, 과밀일 때 올라가요.", how:["검출되면 30–50% 환수하고, 0이 될 때까지 이틀에 한 번 재요.","먹이를 줄이고, 여과재를 한꺼번에 교체하지 않아요.","박테리아제를 넣으면 회복이 빨라질 수 있어요."]},
+  no3:{what:"여과가 끝까지 처리하고 남는 마지막 물질이에요. 독성은 약하지만 환수하지 않으면 계속 쌓여요.", low:"낮을수록 좋아요. 다만 수초가 많은 어항에서 0이면 수초 비료가 부족할 수 있어요.", high:"20을 넘으면 '주의', 40을 넘으면 물고기가 만성 스트레스를 받고 이끼가 늘어요.", how:["주기적인 환수가 질산염을 낮추는 거의 유일한 방법이에요.","20을 자주 넘으면 환수량을 늘리거나 간격을 줄여요.","잘 자라는 수초가 질산염을 먹어 줘요."]},
+  cl2:{what:"수돗물을 소독하는 염소예요. 사람에게는 무해하지만 물고기 아가미와 여과 박테리아에는 해로워요.", low:"0이 정상이에요.", high:"조금이라도 남아 있으면 아가미가 상하고 여과 박테리아가 죽어요.", how:["환수할 물은 하루 이상 받아 두거나 물 중화제를 넣어요.","받아 둔 물을 쓰는데 염소가 나오면 받아 두는 시간을 늘려요."]},
+  gh:{what:"물에 녹은 칼슘·마그네슘 양(총경도)이에요. 단위는 °dH이고, 시험지가 mg/L이면 17.8로 나눠요.", low:"네온·카디널·코리도라스는 연한 물 출신이라 낮아도 괜찮아요. 새우나 달팽이는 너무 낮으면 탈피나 껍데기에 문제가 생길 수 있어요.", high:"높으면 연한 물 종이 번식을 잘 안 하고, 오래가면 부담이 될 수 있어요.", how:["연한 물 어항이라면 지금처럼 낮게 유지해도 돼요.","새우·달팽이를 키운다면 미네랄 보충제를 조금 써요.","석회질 돌이나 산호사를 넣으면 올라가요."]},
+  kh:{what:"pH가 갑자기 떨어지지 않게 붙잡아 주는 힘(탄산경도)이에요. 단위는 °dH이고, mg/L이면 17.8로 나눠요.", low:"낮으면 pH 완충력이 약해져, 환수를 오래 건너뛰면 pH가 서서히 또는 갑자기 떨어질 수 있어요. 1 아래는 특히 주의해요.", high:"높으면 pH도 함께 높게 유지돼요. 연한 물 종에게는 부담이 될 수 있어요.", how:["KH가 낮은 어항은 매주 환수를 거르지 않는 게 가장 중요해요.","pH가 6.5 아래로 내려가는지 KH와 함께 지켜봐요.","올려야 하면 소량의 산호사나 KH 보충제를 천천히 써요."]},
+  tds:{what:"물에 녹아 있는 모든 것의 양이에요. 하나하나를 알려 주진 않지만, 변화 추세로 노폐물이 쌓이는지 볼 수 있어요.", low:"수돗물과 비슷하거나 조금 높은 게 보통이에요.", high:"환수 직후보다 계속 오르기만 하면 노폐물이 쌓이는 중이에요.", how:["환수 직후 값을 기준으로 삼고, 기준보다 50 이상 오르면 환수해요.","비료·약품을 넣으면 일시적으로 올라요."]}
+};
+function openParamInfo(k, tankId){
+  const p = PARAMS.find(x => x.k === k); if (!p) return;
+  const info = PARAM_INFO[k] || {};
+  const tanks = state.tanks.filter(t => state.logs.some(l => l.tankId === t.id && l.type === "water" && num(l[k]) != null));
+  const rows = state.logs.filter(l => l.type === "water" && num(l[k]) != null && (!tankId || l.tankId === tankId)).slice(0, 12);
+  const rng = (a) => a[0] === a[1] ? `${a[0]}` : `${a[0]}–${a[1]}`;
+  openSheet(`<div class="row between"><h3>${esc(p.label)}${p.unit ? ` <span class="muted small">(${esc(p.unit)})</span>` : ""}</h3><button class="btn sm" data-act="close">닫기</button></div>
+    <p style="margin:0">${esc(info.what || "")}</p>
+    <div class="pgrid"><div class="pt ok"><span class="k">좋음</span><span class="v" style="font-size:1rem">${rng(p.ok)}</span><span class="s"><b>✓ 좋음</b></span></div><div class="pt warn"><span class="k">주의</span><span class="v" style="font-size:1rem">${rng(p.warn)}</span><span class="s"><b>▲ 주의</b></span></div><div class="pt bad"><span class="k">나쁨</span><span class="v" style="font-size:1rem">그 밖</span><span class="s"><b>✕ 나쁨</b></span></div></div>
+    <dl class="kv"><dt class="small" style="font-weight:600">낮으면</dt><dd class="small">${esc(info.low || "")}</dd><dt class="small" style="font-weight:600">높으면</dt><dd class="small">${esc(info.high || "")}</dd></dl>
+    <div><b class="small">관리법</b><ul class="small" style="margin:4px 0 0;padding-left:1.2rem">${(info.how || []).map(x => `<li>${esc(x)}</li>`).join("")}</ul></div>
+    <div><b class="small">기록 추이</b><div class="chart-box" style="margin-top:6px">${chartSVG(p, tanks, 0)}</div>
+      <div class="legend">${tanks.map(t => `<span><i style="display:inline-block;width:.7rem;height:.7rem;border-radius:50%;background:${tankColor(t.id)}"></i>${esc(t.name)}</span>`).join("")}<span><i class="lg" style="background:var(--ok);opacity:.35"></i>좋음 범위</span></div></div>
+    ${rows.length ? `<table class="dtable"><thead><tr><th>날짜</th><th>어항</th><th>값</th><th>상태</th></tr></thead><tbody>${rows.map(l => { const v = num(l[k]), st = pStatus(p, v); return `<tr><td>${esc(l.date.slice(5).replace("-","/"))}</td><td>${esc(tankName(l.tankId))}</td><td class="n">${v}</td><td class="st ${st}">${ST_MARK[st]}</td></tr>`; }).join("")}</tbody></table>` : ""}
+    <p class="hint" style="margin:0">적정 범위는 연한 물 열대어(테트라·코리도라스) 기준이에요.</p>`);
+}
 const ST_MARK = {ok:"✓ 좋음", warn:"▲ 주의", bad:"✕ 나쁨"};
 function measuredLogs(tankId){ return state.logs.filter(l => l.tankId === tankId && l.type === "water" && PARAMS.some(p => num(l[p.k]) != null)); }
 function paramPanel(tankId, compact){
@@ -1103,14 +1143,14 @@ function paramPanel(tankId, compact){
   const fmtN = v => String(Math.round(v * 100) / 100);
   const tiles = shown.map(p => {
     const v = num(last[p.k]);
-    if (v == null) { const old = ms.find(l => num(l[p.k]) != null); return `<div class="pt none"><span class="k">${p.label}</span><span class="v">—</span><span class="s"><span class="tr">${old ? `${fmtN(num(old[p.k]))} · ${ago(old.date)}` : "측정 안 함"}</span></span></div>`; }
+    if (v == null) { const old = ms.find(l => num(l[p.k]) != null); return `<div class="pt none" data-act="param-info" data-k="${p.k}" data-tank-id="${esc(tankId)}"><span class="k">${p.label}</span><span class="v">—</span><span class="s"><span class="tr">${old ? `${fmtN(num(old[p.k]))} · ${ago(old.date)}` : "측정 안 함"}</span></span></div>`; }
     const st = pStatus(p, v), prev = ms.slice(1).find(l => num(l[p.k]) != null);
     let tr = ""; if (prev) { const d = v - num(prev[p.k]); tr = Math.abs(d) < 1e-9 ? "→ 그대로" : `${d > 0 ? "↑" : "↓"} ${fmtN(Math.abs(d))}`; }
-    return `<div class="pt ${st}" title="${p.label} ${v}${p.unit} · 적정 ${p.ok[0]}–${p.ok[1]}${p.unit}${prev ? ` · 지난 측정 ${num(prev[p.k])} (${prev.date})` : ""}"><span class="k">${p.label}</span><span class="v">${fmtN(v)}<small>${p.unit}</small></span><span class="s"><b>${ST_MARK[st] || ""}</b>${tr && !compact ? `<span class="tr">${tr}</span>` : tr && compact ? `<span class="tr">${tr.split(" ")[0]}</span>` : ""}</span></div>`;
+    return `<button type="button" class="pt ${st}" data-act="param-info" data-k="${p.k}" data-tank-id="${esc(tankId)}" title="${p.label} ${v}${p.unit} · 적정 ${p.ok[0]}–${p.ok[1]}${p.unit}${prev ? ` · 지난 측정 ${num(prev[p.k])} (${prev.date})` : ""} · 눌러서 설명과 추이 보기"><span class="k">${p.label}</span><span class="v">${fmtN(v)}<small>${p.unit}</small></span><span class="s"><b>${ST_MARK[st] || ""}</b>${tr && !compact ? `<span class="tr">${tr}</span>` : tr && compact ? `<span class="tr">${tr.split(" ")[0]}</span>` : ""}</span></button>`;
   }).join("");
   const worstSt = worst(shown.map(p => pStatus(p, num(last[p.k]))));
   const head = compact ? "" : `<div class="phead"><span><b>${esc(tankLabel(tankId))}</b> <span class="muted small">${fmtDay(last.date)} · ${ago(last.date)}</span></span><span class="small"><b class="st ${worstSt || ""}">${worstSt ? ST_MARK[worstSt] : ""}</b> <button class="btn link small" data-act="edit-log" data-id="${esc(last.id)}">기록 보기 ›</button></span></div>`;
-  const note = !compact && last.memo ? `<span class="muted small" style="white-space:pre-line">${esc(last.memo)}</span>` : "";
+  const note = last.memo ? `<span class="muted small" style="white-space:pre-line;${compact ? "display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden" : ""}">${esc(last.memo)}</span>` : "";
   return `<div style="display:grid;gap:8px">${head}<div class="pgrid ${compact ? "c" : ""}">${tiles}</div>${note}</div>`;
 }
 function vWater(){
@@ -1129,7 +1169,7 @@ function vWater(){
   const algae = state.logs.filter(l => inTank(l) && l.type === "water" && (hasVal(l.algae) || hasVal(l.algaeLv))).slice(0, 8);
   h += `<section class="card"><div class="row between"><h2 class="sec">${esc(lvF?.label || "이끼")} 변화</h2>${algae.length ? `<button class="btn link" data-act="hist" data-type="water">더 보기 ›</button>` : ""}</div>${algae.length ? `<div class="tl">${algae.map(l => `<button class="hrow" data-act="edit-log" data-id="${esc(l.id)}" style="grid-template-columns:auto 1fr"><span class="muted small">${l.date.slice(5).replace("-","/")}</span><span class="fcs">${state.tank==="all"?`<span class="fc">${esc(tankEmoji(l.tankId))}</span>`:""}${hasVal(l.algaeLv) ? `<span class="fc ${optOf(lvF, l.algaeLv)?.st === "ok" ? "" : optOf(lvF, l.algaeLv)?.st || ""}">${esc(l.algaeLv)}</span>` : ""}${hasVal(l.algae) ? `<span class="fc">${esc((l.algae||[]).join(", "))}</span>` : ""}${l.memo ? `<span class="muted small">${esc(l.memo)}</span>` : ""}</span></button>`).join("")}</div>` : `<p class="muted" style="margin:0">물 상태 기록에서 이끼를 남기면 여기서 흐름을 볼 수 있어요.</p>`}</section>`;
   void algF;
-  if (S.kit) {
+  if (S.kit || state.logs.some(l => l.type === "water" && PARAMS.some(p => num(l[p.k]) != null))) {
     if (!paramsOn().some(p => p.k === state.param)) state.param = paramsOn()[0]?.k;
     const p = PARAMS.find(x => x.k === state.param);
     if (p) h += `<section class="card"><h2 class="sec">측정값 추이</h2>
@@ -1144,13 +1184,15 @@ function vWater(){
 function drawChart(){
   const box = $("#chartBox"); if (!box) return;
   const p = PARAMS.find(x => x.k === state.param); if (!p) return;
-  const tanks = viewTanks();
-  const minDate = state.range ? addDays(today(), -state.range) : "0000-00-00";
+  box.innerHTML = chartSVG(p, viewTanks(), state.range);
+}
+function chartSVG(p, tanks, range){
+  const minDate = range ? addDays(today(), -range) : "0000-00-00";
   const series = tanks.map(t => ({t, pts: state.logs.filter(l => l.tankId === t.id && l.type === "water" && num(l[p.k]) != null && l.date >= minDate).map(l => ({d:l.date, v:num(l[p.k])})).reverse()}));
   const all = series.flatMap(s => s.pts);
-  if (!all.length) { box.innerHTML = `<div class="empty">이 기간에 ${esc(p.label)} 측정 기록이 없어요.</div>`; return; }
+  if (!all.length) return `<div class="empty">이 기간에 ${esc(p.label)} 측정 기록이 없어요.</div>`;
   const W = 640, H = 230, L = 44, R = 14, Tp = 14, B = 30;
-  const d0 = state.range ? minDate : all.reduce((a,b) => a < b.d ? a : b.d, all[0].d), span = Math.max(1, diffDays(today(), d0));
+  let d0 = range ? minDate : all.reduce((a,b) => a < b.d ? a : b.d, all[0].d); if (!range && diffDays(today(), d0) < 14) d0 = addDays(today(), -14); const span = Math.max(1, diffDays(today(), d0));
   let lo = Math.min(p.ok[0], ...all.map(x => x.v)), hi = Math.max(p.ok[1], ...all.map(x => x.v));
   if (hi === lo) hi = lo + 1; const pv = (hi - lo) * .12; lo = Math.max(0, lo - pv); hi += pv;
   const X = d => L + (W - L - R) * diffDays(d, d0) / span, Y = v => Tp + (H - Tp - B) * (1 - (v - lo) / (hi - lo));
@@ -1161,7 +1203,7 @@ function drawChart(){
   series.forEach(se => { if (!se.pts.length) return; const c = tankColor(se.t.id);
     if (se.pts.length > 1) s += `<polyline fill="none" stroke="${c}" stroke-width="2" points="${se.pts.map(x => `${X(x.d).toFixed(1)},${Y(x.v).toFixed(1)}`).join(" ")}"/>`;
     se.pts.forEach((x,i) => { const last = i === se.pts.length-1; s += `<circle cx="${X(x.d).toFixed(1)}" cy="${Y(x.v).toFixed(1)}" r="${last?4.5:2.8}" fill="${last?c:"var(--surface)"}" stroke="${c}" stroke-width="1.8"><title>${esc(se.t.name)} ${x.d} · ${x.v}${p.unit}</title></circle>`; }); });
-  box.innerHTML = s + `</svg>`;
+  return s + `</svg>`;
 }
 
 /* ================= photos ================= */
@@ -2107,6 +2149,7 @@ document.addEventListener("click", e => {
     case "type-del-yes": deleteType(state.editType); break;
     case "ai-auto": settings.aiAuto = !settings.aiAuto; saveSettings(); break;
     case "ai-review": openAIReview(tid); break;
+    case "param-info": openParamInfo(b.dataset.k, b.dataset.tankId); break;
     case "restore": restoreBackup(); break;
     case "logout": if (state.confirm !== "logout") { state.confirm = "logout"; toast("한 번 더 누르면 이 기기에서 로그아웃해요"); setTimeout(() => { if (state.confirm === "logout") state.confirm = ""; }, 4000); } else { try { [(window.FISH_LS + "settings"),(window.FISH_LS + "view"),(window.FISH_LS + "tank")].forEach(k => localStorage.removeItem(k)); } catch {} PN.logout(); } break;
     case "ics": if (!state.reminders.some(r => r.enabled !== false)) toast("켜진 알림이 없어요"); else saveFile("어항알림.ics", buildICS(), "text/calendar"); break;
