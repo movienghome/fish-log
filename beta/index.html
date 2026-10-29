@@ -345,6 +345,7 @@ button.pt{cursor:pointer;font:inherit;color:inherit}button.pt:hover{outline:1px 
 .pt.ok .s b{color:var(--ok)} .pt.warn{border-color:var(--warn);border-style:dashed} .pt.warn .s b{color:var(--warn)} .pt.bad{border-color:var(--bad);border-width:2.5px} .pt.bad .s b{color:var(--bad)}
 .pt.none .v{color:var(--muted)}
 .pgrid.c .pt{padding:5px 7px}.pgrid.c .pt .v{font-size:1rem}
+.todo{background:var(--sunk);border-radius:10px;padding:6px 10px}.todo ul{margin:2px 0 0;padding-left:1.1rem}
 .phead{display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap}
 .betabar{background:var(--warn);color:#fff;padding:6px max(16px,env(safe-area-inset-right,0px)) 6px max(16px,env(safe-area-inset-left,0px));font-size:.85rem;display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap}
 .betabar button{background:#fff;color:#000;border:none;border-radius:7px;padding:.2rem .6rem;font-size:.8rem;font-weight:600}
@@ -931,7 +932,7 @@ function waterPill(w){
   return `<span class="pill ${st||""}">${esc([base, status].filter(Boolean).join(" · ") || "확인함")}</span> <span class="muted small">${ago(w.date)}</span>`;
 }
 function paramChips(l){
-  return PARAMS.filter(p => num(l[p.k]) != null).map(p => { const n = num(l[p.k]), st = pStatus(p, n); return `<span class="fc ${st}"><span class="k">${p.label}</span>${n}<span class="k">${esc(p.unit)}</span> ${({ok:"✓",warn:"▲",bad:"✕"})[st]}</span>`; }).join("");
+  return PARAMS.filter(p => num(l[p.k]) != null).map(p => { const n = num(l[p.k]), st = pStatus(p, n); return `<span class="fc ${st}" role="button" tabindex="0" data-act="param-info" data-k="${p.k}" data-tank-id="${esc(l.tankId)}" title="눌러서 ${p.label} 설명과 추이 보기" style="cursor:pointer"><span class="k">${p.label}</span>${n}<span class="k">${esc(p.unit)}</span> ${({ok:"✓",warn:"▲",bad:"✕"})[st]}</span>`; }).join("");
 }
 function entryHtml(l, opt = {}){
   const T = typeOf(l.type), hasP = l.type === "water" && PARAMS.some(p => num(l[p.k]) != null), sum = hasP ? summary(noParams(l)) : summary(l), st = recordStatus(l);
@@ -1107,6 +1108,21 @@ function heatBlock(t, from, compact){
     ${last && !compact ? `<div class="pills"><button class="pill ${recordStatus(last)||""}" data-act="qe" data-type="water" data-tank-id="${esc(t.id)}" style="background:none;cursor:pointer">${esc(summary(last) || "확인함")} ✎</button><span class="muted small" style="align-self:center">${ago(last.date)}</span></div>` : ""}</div>`;
 }
 const heatLegend = () => `<div class="legend"><span><i class="lg" style="background:var(--ok)"></i>좋음</span><span><i class="lg" style="background:var(--warn)"></i>주의</span><span><i class="lg" style="background:var(--bad)"></i>나쁨</span><span><i class="lg" style="background:var(--none)"></i>기록 없음</span><span><i class="lg wcl"></i>환수한 날</span></div>`;
+const PARAM_ACT = {
+  temp:{hi:"수온이 높아요. 뚜껑을 열거나 쿨링팬으로 내리고, 산소를 늘려 주세요.", lo:"수온이 낮아요. 히터 설정과 작동을 확인하세요."},
+  ph:{hi:"pH가 높아요. 석회질 돌(청룡석 등)의 영향인지 보고, 급하게 내리지 마세요.", lo:"pH가 낮아요. 환수 간격을 줄이고 KH도 함께 확인하세요."},
+  nh3:{hi:"암모니아가 나왔어요. 오늘 30–50% 환수하고 먹이를 줄이세요."},
+  no2:{hi:"아질산이 나왔어요. 30–50% 환수하고, 0이 될 때까지 이틀마다 재세요."},
+  no3:{hi:"질산염이 조금 높아요. 다음 환수 양을 25–30%로 늘리거나 간격을 줄이세요."},
+  cl2:{hi:"염소가 나왔어요. 환수 물을 하루 이상 받아 두거나 중화제를 쓰세요."},
+  gh:{hi:"경도가 높아요. 석회질 돌이나 산호사가 있는지 확인하세요.", lo:"경도가 아주 낮아요. 새우·달팽이를 키우면 미네랄을 조금 보충하세요."},
+  kh:{hi:"KH가 높아요. 석회질 돌의 영향일 수 있어요.", lo:"KH가 아주 낮아요. 매주 환수를 거르지 말고 pH가 떨어지는지 지켜보세요."},
+  tds:{hi:"TDS가 높아요. 환수 양을 늘리세요."}
+};
+function waterActions(l){
+  const out = PARAMS.filter(p => num(l[p.k]) != null && pStatus(p, num(l[p.k])) !== "ok").map(p => { const v = num(l[p.k]), a = PARAM_ACT[p.k] || {}; return (v > p.ok[1] ? a.hi : a.lo) || `${p.label}이 적정 범위를 벗어났어요.`; });
+  return out.length ? out : ["측정값이 모두 좋아요. 지금 환수 주기를 그대로 유지하세요."];
+}
 const PARAM_INFO = {
   temp:{what:"물의 온도예요. 열대어는 체온이 물 온도를 따라가서, 온도가 대사와 면역을 정해요.", low:"낮으면 먹이 반응이 줄고 면역이 떨어져 흰점병이 잘 생겨요.", high:"높으면 물속 산소가 줄어 수면 호흡이 늘고, 코리도라스처럼 서늘한 물을 좋아하는 종이 힘들어해요.", how:["히터 설정 온도를 고정하고, 계절이 바뀔 때 한 번씩 확인해요.","환수할 새 물은 어항 물과 온도 차이를 2°C 안쪽으로 맞춰요.","여름에는 뚜껑을 열거나 쿨링팬으로 내려요."]},
   ph:{what:"물이 산성인지 알칼리성인지 나타내요. 7이 중성, 낮을수록 산성이에요. 네온·카디널 테트라와 코리도라스는 약산성(6.0–7.0)에서 잘 지내요.", low:"너무 낮아지면(6.0 아래) 여과 박테리아가 약해지고, 빠르게 떨어지면 물고기가 스트레스를 받아요. KH가 낮은 물에서 환수를 오래 건너뛰면 서서히 떨어져요.", high:"높아지는 건 보통 석회질 돌(청룡석 등)이나 산호사 때문이에요. 7.5를 넘으면 연한 물 종에게는 부담이에요.", how:["숫자를 맞추는 것보다 '안정'이 중요해요. 하루에 0.3 넘게 바뀌지 않게 해요.","매주 정해진 양을 환수하면 대부분 저절로 안정돼요.","낮아지는 추세면 환수 간격을 줄이고, KH도 같이 봐요."]},
@@ -1151,7 +1167,9 @@ function paramPanel(tankId, compact){
   const worstSt = worst(shown.map(p => pStatus(p, num(last[p.k]))));
   const head = compact ? "" : `<div class="phead"><span><b>${esc(tankLabel(tankId))}</b> <span class="muted small">${fmtDay(last.date)} · ${ago(last.date)}</span></span><span class="small"><b class="st ${worstSt || ""}">${worstSt ? ST_MARK[worstSt] : ""}</b> <button class="btn link small" data-act="edit-log" data-id="${esc(last.id)}">기록 보기 ›</button></span></div>`;
   const note = last.memo ? `<span class="muted small" style="white-space:pre-line;${compact ? "display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden" : ""}">${esc(last.memo)}</span>` : "";
-  return `<div style="display:grid;gap:8px">${head}<div class="pgrid ${compact ? "c" : ""}">${tiles}</div>${note}</div>`;
+  const acts = waterActions(last);
+  const todo = `<div class="todo"><b class="small">할 일</b><ul class="small">${acts.map(x => `<li>${esc(x)}</li>`).join("")}</ul></div>`;
+  return `<div style="display:grid;gap:8px">${head}<div class="pgrid ${compact ? "c" : ""}">${tiles}</div>${todo}${note}</div>`;
 }
 function vWater(){
   const tanks = viewTanks();
@@ -1980,7 +1998,9 @@ const STRIP_PROMPT = `${AI_ROLE}
 
 함께 올린 사진은 어항 수질 시험지(스트립) 또는 시약 결과와 색상표야. 각 패드 색을 색상표와 비교해서 값을 읽어 줘. 사용자가 색을 직접 비교하기 어려워해.
 - 반드시 같은 사진 속 색상표와 상대적으로 비교해. 조명이 색을 띠거나(보라·노랑) 색상표가 사진에 없으면 confidence를 low로.
-- 암모니아·아질산은 0인지 아닌지가 가장 중요하니 그 판단을 note에 분명히.
+- 아질산(암모니아 칸이 있으면 암모니아도)이 0인지 아닌지가 가장 중요하니 그 판단을 note에 분명히.
+- 시험지에 없는 항목은 null로 두고, note나 본문에서 따로 언급하지 마.
+- 적정 범위(연한 물 테트라·코리도라스 기준: pH 6.0–7.5, 아질산 0, 질산염 20 이하, 염소 0, GH 1–15°dH, KH 1–8°dH)를 벗어난 항목이 있으면 note에 그 항목과 할 일을 한 줄로.
 - 염소(Cl₂) 패드가 있으면 함께 읽어 cl2에 mg/L로.
 - GH·KH는 시험지 단위가 mg/L(ppm)이면 °dH로 바꿔서(÷17.8, 소수 첫째 자리) 답해. 본문에는 원래 단위 값도 함께 적어.
 - 읽을 수 없는 항목, 시험지에 없는 항목은 null.
