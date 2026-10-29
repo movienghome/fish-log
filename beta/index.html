@@ -1410,7 +1410,7 @@ function typeFieldsHtml(type, v){
   if (type === "water") {
     const hasKit = PARAMS.some(p => num(v[p.k]) != null);
     h += `<details class="askbox" style="margin-top:10px"><summary class="small" style="cursor:pointer;font-weight:600">🤖 시험지 읽기 · Claude 답 붙여넣기</summary>
-      <ol class="small" style="margin:0;padding-left:1.2rem"><li>아래 버튼으로 질문을 복사하고 Claude를 엽니다.</li><li>질문을 붙여 넣고 시험지와 색상표가 함께 나온 사진을 올립니다. 흰 빛 아래에서 찍어 주세요.</li><li>Claude 답을 통째로 복사해 아래 칸에 붙여 넣고 '값 채우기'를 누릅니다.</li></ol>
+      <ol class="small" style="margin:0;padding-left:1.2rem"><li>아래 버튼으로 질문을 복사하고 Claude를 엽니다.</li><li>질문을 붙여 넣고 시험지와 색상표가 함께 나온 사진을 올립니다. 흰 빛 아래에서 찍어 주세요.</li><li>Claude 답을 통째로 복사해 아래 칸에 붙여 넣으면 값이 바로 채워져요.</li></ol>
       <div class="row"><button type="button" class="btn sm" id="stripCopy">📋 질문 복사</button><a class="btn sm" href="https://claude.ai/new" target="_blank" rel="noopener" style="text-decoration:none">Claude 열기 ↗</a></div>
       <textarea id="stripPaste" placeholder="Claude 답을 여기에 붙여넣기"></textarea>
       <div class="row"><button type="button" class="btn sm primary" id="stripApply">값 채우기</button><span class="hint" id="stripHint"></span></div></details>`;
@@ -1584,7 +1584,8 @@ function openLogForm(prefill = {}, opt = {}){
     sh.addEventListener("click", e => { if (e.target.id === "pctUse") { pctTouched = false; autoPct(); }
       if (e.target.id === "stripCopy") copyText(STRIP_PROMPT, "질문을 복사했어요. Claude에 붙여 넣고 시험지 사진을 함께 올려 주세요");
       if (e.target.id === "stripApply") {
-        const hint = sh.querySelector("#stripHint"), r = parseAIJson(sh.querySelector("#stripPaste").value), vals = r?.values || {};
+        const sp = sh.querySelector("#stripPaste"); sp.dataset.applied = sp.value;
+        const hint = sh.querySelector("#stripHint"), r = parseAIJson(sp.value), vals = r?.values || {};
         if (!r) { hint.textContent = "답에서 값을 찾지 못했어요. Claude 답 전체를 붙여 넣어 주세요"; return; }
         const got = PARAMS.filter(p => num(vals[p.k]) != null);
         bag = {...bag, ...collectFields(type, form, {...bag, type})};
@@ -1596,8 +1597,10 @@ function openLogForm(prefill = {}, opt = {}){
         if (h2) h2.textContent = got.length ? `${got.map(p => `${p.label} ${vals[p.k]}`).join(", ")} · 확신 ${({high:"높음",medium:"보통",low:"낮음"})[r.confidence] || "?"}${r.note ? ` · ${r.note}` : ""}` : (r.note || "읽을 수 있는 값이 없었어요");
       } });
     sh.addEventListener("keydown", e => { if (e.key === "Enter" && e.target.id?.startsWith("addin-")) { e.preventDefault(); addOptInForm(sh, form, type, e.target.id.slice(6), curValues); } });
+    sh.addEventListener("paste", e => { if (e.target.id === "stripPaste") setTimeout(() => sh.querySelector("#stripApply")?.click(), 0); });
     form.addEventListener("submit", async e => {
       e.preventDefault();
+      { const sp = sh.querySelector("#stripPaste"); if (sp && sp.value.trim() && sp.dataset.applied !== sp.value) sh.querySelector("#stripApply").click(); }
       if (uploading) { toast("사진을 올리는 중이에요. 잠시만요"); return; }
       const fd = new FormData(form), g = k => (fd.get(k) ?? "").toString().trim();
       const rec = {type, tankId:g("tankId"), date:g("date") || today(), time:g("time"), memo:g("memo"), created:v.created || Date.now(), ...collectFields(type, form, {...bag, type:bag.type})};
