@@ -1,7 +1,7 @@
 // 어항 일지 service worker: opens instantly from the device copy, refreshes files in the background.
 const BETA = self.location.pathname.includes('/beta/');
 const PRE = BETA ? 'aqb-' : 'aq-';
-const VERSION = PRE + '2026-10-29-2';
+const VERSION = PRE + '2026-10-29-3';
 const EXT = VERSION + '-ext';
 const SHELL = ['./', './index.html', './backend.js', './manifest.webmanifest',
   './icons/icon-192.png', './icons/icon-512.png', './icons/icon-180.png'];

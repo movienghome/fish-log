@@ -345,6 +345,11 @@ button.pt{cursor:pointer;font:inherit;color:inherit}button.pt:hover{outline:1px 
 .pt.ok .s b{color:var(--ok)} .pt.warn{border-color:var(--warn);border-style:dashed} .pt.warn .s b{color:var(--warn)} .pt.bad{border-color:var(--bad);border-width:2.5px} .pt.bad .s b{color:var(--bad)}
 .pt.none .v{color:var(--muted)}
 .pgrid.c .pt{padding:5px 7px}.pgrid.c .pt .v{font-size:1rem}
+.ppanel{container-type:inline-size;container-name:ppanel}
+.pgrid.pfit{grid-template-columns:repeat(var(--cols),minmax(0,1fr))}
+.pfit .pt .v{overflow:hidden}
+@container ppanel (max-width:30rem){.pfit .pt{padding:5px 5px}.pfit .pt .v{font-size:.95rem}.pfit .pt .v small{font-size:.6rem;margin-left:1px}.pfit .pt .k,.pfit .pt .s{font-size:.7rem}}
+@container ppanel (max-width:24rem){.pgrid.pfit{grid-template-columns:repeat(var(--cols2),minmax(0,1fr))}}
 .clamp{white-space:pre-line;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;cursor:pointer}.clamp.open{display:block}
 .todo{background:var(--sunk);border-radius:10px;padding:6px 10px}.todo ul{margin:2px 0 0;padding-left:1.1rem}
 .phead{display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap}
@@ -1170,7 +1175,8 @@ function paramPanel(tankId, compact){
   const note = last.memo ? `<span class="muted small clamp" data-act="clamp" role="button" tabindex="0" title="눌러서 펼치기/접기">${esc(last.memo)}</span>` : "";
   const ai = Array.isArray(last.aiTodo) && last.aiTodo.length, acts = ai ? last.aiTodo : waterActions(last);
   const todo = `<div class="todo"><b class="small">할 일</b> <span class="muted small">${ai ? "🤖 Claude 판독" : "기본 안내"}</span><ul class="small">${acts.map(x => `<li>${esc(x)}</li>`).join("")}</ul></div>`;
-  return `<div style="display:grid;gap:8px">${head}<div class="pgrid ${compact ? "c" : ""}">${tiles}</div>${todo}${note}</div>`;
+  const n = shown.length, cols = n <= 6 ? n : Math.ceil(n / 2), half = Math.ceil(n / 2), cols2 = n <= 3 ? n : half <= 4 ? half : Math.ceil(n / 3);
+  return `<div class="ppanel" style="display:grid;gap:8px">${head}<div class="pgrid pfit ${compact ? "c" : ""}" style="--cols:${cols};--cols2:${cols2}">${tiles}</div>${todo}${note}</div>`;
 }
 function vWater(){
   const tanks = viewTanks();

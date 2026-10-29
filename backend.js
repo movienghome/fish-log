@@ -4,6 +4,8 @@ const base = `https://www.gstatic.com/firebasejs/${V}/`;
 const $ = s => document.querySelector(s);
 const gate = $('#gate');
 const cfg = window.POCKET_FIREBASE;
+const BETA = location.pathname.includes('/beta/');
+const NS = BETA ? 'fish-beta' : 'fish';
 
 if (!cfg || !cfg.apiKey) {
   gate.hidden = false; $('#login').hidden = true; $('#nocfg').hidden = false;
@@ -67,7 +69,7 @@ async function start() {
     const c = F.collection(fs, path);
     const q = () => F.query(c, ...cons);
     return {
-      path, doc: id => docApi(path + '/' + (id || F.doc(c).id)),
+      path, doc: id => docApi(path + '/' + (id || (Date.now().toString(36) + crypto.getRandomValues(new Uint32Array(2)).join('').slice(0, 12)))),
       orderBy: (f, d) => colApi(path, [...cons, F.orderBy(f, d || 'asc')]),
       where: (f, op, v) => colApi(path, [...cons, F.where(f, op, v)]),
       limit: n => colApi(path, [...cons, F.limit(n)]),
@@ -124,16 +126,31 @@ async function start() {
 
   Object.assign(window.PN, { cachedUrl: id => urls.get(id) || null, account: () => auth.currentUser && { email: auth.currentUser.email } });
 
+  // Beta works on its own copy of the real journal. Photos are shared, so beta never deletes them.
+  async function copyFromLive() {
+    if (!BETA) return;
+    const src = `data/users/${uid}/fish`, dst = `data/users/${uid}/${NS}`;
+    for (const c of ['tanks', 'logs', 'reminders']) {
+      const old = await F.getDocs(F.collection(fs, `${dst}/${c}`));
+      await Promise.all(old.docs.map(d => F.deleteDoc(F.doc(fs, `${dst}/${c}/${d.id}`))));
+      const cur = await F.getDocs(F.collection(fs, `${src}/${c}`));
+      await Promise.all(cur.docs.map(d => F.setDoc(F.doc(fs, `${dst}/${c}/${d.id}`), d.data())));
+    }
+    const sm = await F.getDoc(F.doc(fs, `${src}/settings/main`));
+    if (sm.exists()) await F.setDoc(F.doc(fs, `${dst}/settings/main`), sm.data());
+  }
   let resolved = false;
   A.onAuthStateChanged(auth, async user => {
     if (user) {
       gate.hidden = true;
       if (resolved) { if (user.uid !== uid) location.reload(); return; }
       resolved = true; uid = user.uid;
+      if (BETA) { try { const has = await F.getDoc(F.doc(fs, `data/users/${uid}/${NS}/settings/main`)); if (!has.exists()) { gate.hidden = false; $('#login').hidden = true; $('#nocfg').hidden = false; $('#nocfg p').textContent = '베타용으로 실제 기록을 복사하는 중이에요…'; await copyFromLive(); gate.hidden = true; } } catch (e) { console.error(e); gate.hidden = true; } }
       window.__pnResolve({
-        db: { doc: p => docApi(`data/users/${uid}/fish/${p}`), collection: p => colApi(`data/users/${uid}/fish/${p}`) },
+        db: { doc: p => docApi(`data/users/${uid}/${NS}/${p}`), collection: p => colApi(`data/users/${uid}/${NS}/${p}`) },
         user: { id: async () => uid, isOwner: () => true, canEdit: () => true, can: () => true },
-        assets: { upload, delete: remove },
+        assets: { upload, delete: BETA ? async () => ({ deleted: false }) : remove },
+        copyFromLive,
         downloads,
         getBlob, blobUrl,
         logout: async () => { await A.signOut(auth); try { await F.terminate(fs); await F.clearIndexedDbPersistence(fs); } catch (e) {} location.reload(); }
