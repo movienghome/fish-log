@@ -6,6 +6,8 @@ const gate = $('#gate');
 const cfg = window.POCKET_FIREBASE;
 const BETA = location.pathname.includes('/beta/');
 const NS = BETA ? 'fish-beta' : 'fish';
+// Bump on every release of the main app: the first open of a new release folds the beta's records into the real ones.
+const RELEASE = '2026-11-05-1';
 
 if (!cfg || !cfg.apiKey) {
   gate.hidden = false; $('#login').hidden = true; $('#nocfg').hidden = false;
@@ -59,8 +61,8 @@ async function start() {
       path, id: r.id,
       collection: c => colApi(path + '/' + c),
       get: async () => { try { return wrap(await F.getDoc(r)); } catch (e) { return wrap(await F.getDocFromCache(r)); } },
-      set: d => fastWrite(F.setDoc(r, d)),
-      update: d => fastWrite(F.updateDoc(r, d)),
+      set: d => fastWrite(F.setDoc(r, { ...d, _t: Date.now() })),
+      update: d => fastWrite(F.updateDoc(r, { ...d, _t: Date.now() })),
       delete: () => fastWrite(F.deleteDoc(r)),
       onSnapshot: (next, error) => F.onSnapshot(r, s => next(wrap(s)), e => error && error({ code: e.code === 'permission-denied' ? 'revoked' : 'unavailable', message: e.message }))
     };
@@ -127,25 +129,63 @@ async function start() {
   Object.assign(window.PN, { cachedUrl: id => urls.get(id) || null, account: () => auth.currentUser && { email: auth.currentUser.email } });
 
   // Beta works on its own copy of the real journal. Photos are shared, so beta never deletes them.
+  const COLS = ['tanks', 'logs', 'reminders'];
+  const D = p => F.doc(fs, p);
+  async function all(col) { const q = await F.getDocs(F.collection(fs, col)); return new Map(q.docs.map(d => [d.id, d.data()])); }
+  async function inChunks(list, fn) { for (let i = 0; i < list.length; i += 40) await Promise.all(list.slice(i, i + 40).map(fn)); }
   async function copyFromLive() {
     if (!BETA) return;
-    const src = `data/users/${uid}/fish`, dst = `data/users/${uid}/${NS}`;
-    for (const c of ['tanks', 'logs', 'reminders']) {
-      const old = await F.getDocs(F.collection(fs, `${dst}/${c}`));
-      await Promise.all(old.docs.map(d => F.deleteDoc(F.doc(fs, `${dst}/${c}/${d.id}`))));
-      const cur = await F.getDocs(F.collection(fs, `${src}/${c}`));
-      await Promise.all(cur.docs.map(d => F.setDoc(F.doc(fs, `${dst}/${c}/${d.id}`), d.data())));
+    const src = `data/users/${uid}/fish`, dst = `data/users/${uid}/${NS}`, at = Date.now(), ids = {};
+    for (const c of COLS) {
+      const old = await all(`${dst}/${c}`); await inChunks([...old.keys()], id => F.deleteDoc(D(`${dst}/${c}/${id}`)));
+      const cur = await all(`${src}/${c}`); await inChunks([...cur], ([id, v]) => F.setDoc(D(`${dst}/${c}/${id}`), v)); ids[c] = [...cur.keys()];
     }
-    const sm = await F.getDoc(F.doc(fs, `${src}/settings/main`));
-    if (sm.exists()) await F.setDoc(F.doc(fs, `${dst}/settings/main`), sm.data());
+    const sm = await F.getDoc(D(`${src}/settings/main`));
+    if (sm.exists()) await F.setDoc(D(`${dst}/settings/main`), sm.data());
+    await F.setDoc(D(dst), { copiedAt: at, ids });
   }
+  // Newest wins. Only things changed in beta after the copy move over; things changed in the real app are kept.
+  function planMerge(beta, live, copiedAt, atCopy) {
+    const tOf = d => d._t || 0, set = [], del = [];
+    for (const [id, b] of beta) { const tb = tOf(b); if (tb <= copiedAt) continue; const l = live.get(id);
+      if (!l) { if (atCopy && atCopy.has(id)) continue; } else if (tOf(l) >= tb) continue; set.push([id, b]); }
+    if (atCopy) for (const id of atCopy) { if (beta.has(id)) continue; const l = live.get(id); if (l && tOf(l) <= copiedAt) del.push(id); }
+    return { set, del };
+  }
+  async function mergeBetaIntoLive() {
+    const U = `data/users/${uid}`, mk = await F.getDoc(D(`${U}/fish-beta`));
+    if (!mk.exists() || mk.data().merged) return 0;
+    const m = mk.data(), C = m.copiedAt || 0; let n = 0;
+    for (const c of COLS) {
+      const [B, L] = await Promise.all([all(`${U}/fish-beta/${c}`), all(`${U}/fish/${c}`)]);
+      const { set, del } = planMerge(B, L, C, m.ids && m.ids[c] ? new Set(m.ids[c]) : null);
+      await inChunks(set, ([id, v]) => F.setDoc(D(`${U}/fish/${c}/${id}`), v));
+      await inChunks(del, id => F.deleteDoc(D(`${U}/fish/${c}/${id}`)));
+      n += set.length + del.length;
+    }
+    const [bs, ls] = await Promise.all([F.getDoc(D(`${U}/fish-beta/settings/main`)), F.getDoc(D(`${U}/fish/settings/main`))]);
+    if (bs.exists()) { const tb = bs.data()._t || 0, tl = ls.exists() ? (ls.data()._t || 0) : 0; if (tb > C && tb > tl) { await F.setDoc(D(`${U}/fish/settings/main`), bs.data()); n++; } }
+    await F.setDoc(D(`${U}/fish-beta`), { merged: true, mergedAt: Date.now() }, { merge: true });  // next beta visit starts from a fresh copy
+    return n;
+  }
+  function busy(t) { gate.hidden = false; $('#login').hidden = true; $('#nocfg').hidden = false; $('#nocfg p').textContent = t; }
   let resolved = false;
   A.onAuthStateChanged(auth, async user => {
     if (user) {
       gate.hidden = true;
       if (resolved) { if (user.uid !== uid) location.reload(); return; }
       resolved = true; uid = user.uid;
-      if (BETA) { try { const has = await F.getDoc(F.doc(fs, `data/users/${uid}/${NS}/settings/main`)); if (!has.exists()) { gate.hidden = false; $('#login').hidden = true; $('#nocfg').hidden = false; $('#nocfg p').textContent = '베타용으로 실제 기록을 복사하는 중이에요…'; await copyFromLive(); gate.hidden = true; } } catch (e) { console.error(e); gate.hidden = true; } }
+      if (BETA) { try { const B = `data/users/${uid}/${NS}`; const mk = await F.getDoc(D(B));
+          if (mk.exists() && !mk.data().merged) {}
+          else if (!mk.exists() && (await F.getDoc(D(`${B}/settings/main`))).exists()) {
+            // a beta copied before change-tracking existed: start tracking from now
+            const ids = {}; for (const c of COLS) ids[c] = [...(await all(`${B}/${c}`)).keys()]; await F.setDoc(D(B), { copiedAt: Date.now(), ids });
+          } else { busy('베타용으로 실제 기록을 복사하는 중이에요…'); await copyFromLive(); } } catch (e) { console.error(e); } gate.hidden = true; }
+      else { try { const rd = D(`data/users/${uid}/fish`); const r = await F.getDoc(rd);
+          if (!r.exists() || r.data().release !== RELEASE) { busy('새 버전 준비 중 · 베타에서 쓴 기록을 합치는 중이에요…'); const n = await mergeBetaIntoLive();
+            await F.setDoc(rd, { release: RELEASE, releasedAt: Date.now() }, { merge: true });
+            if (n) { $('#nocfg p').textContent = `베타에서 바뀐 기록 ${n}건을 실제 일지에 합쳤어요.`; await new Promise(z => setTimeout(z, 1600)); } } }
+        catch (e) { console.error('beta merge', e); } gate.hidden = true; }
       window.__pnResolve({
         db: { doc: p => docApi(`data/users/${uid}/${NS}/${p}`), collection: p => colApi(`data/users/${uid}/${NS}/${p}`) },
         user: { id: async () => uid, isOwner: () => true, canEdit: () => true, can: () => true },
