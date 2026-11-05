@@ -83,7 +83,7 @@ async function start() {
   const urls = new Map(), loading = new Map();
   const CH = 900 * 1024, MAX = 20 * 1024 * 1024;
   let uid = null;
-  const bpath = id => `data/users/${uid}/blobs/${id}`;
+  const bpath = id => `data/users/${uid}/blobs/items/${id}`;  // Firestore needs an even number of path parts for a document; the old path was odd, so every photo upload failed.
   const hex = n => [...crypto.getRandomValues(new Uint8Array(n / 2))].map(b => b.toString(16).padStart(2, '0')).join('');
   async function upload(blob, opt) {
     if (blob.size > MAX) throw { code: 'too_large', message: '20MB까지' };
