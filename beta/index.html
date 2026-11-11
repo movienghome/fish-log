@@ -175,6 +175,22 @@ h2.sec{font-family:var(--f-display);font-size:1.2rem;margin:0;line-height:1.3}
 .hc .wc{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:42%;height:42%;border-radius:50%;background:var(--surface);border:1.5px solid var(--ink)}
 .lg{display:inline-block;width:.75rem;height:.75rem;border-radius:3px;position:relative}
 .lg.wcl{width:.65rem;height:.65rem;border-radius:50%;background:var(--surface);border:1.5px solid var(--ink)}
+.hsum{min-width:0}
+.wc-chart{display:grid;gap:6px;min-width:0}
+.wc-plot{display:flex;align-items:flex-start;min-width:0}
+.wc-axis{flex:none}
+.wc-scroll{overflow-x:auto;direction:rtl;flex:1;min-width:0;scrollbar-width:thin}
+.wc-scroll svg{display:block;direction:ltr;margin-right:auto}
+.wc-chart text{fill:var(--muted);font-family:var(--f-mono);font-size:11.5px}
+.wc-chart text.val{fill:var(--ink);font-size:11px}
+.wc-chart text.mo{font-family:inherit;font-weight:600}
+.wc-bar{cursor:pointer;outline:none}
+.wc-bar.on .bar,.wc-bar:focus-visible .bar{stroke:var(--ink);stroke-width:2}
+.wc-bar.on .hit{fill:color-mix(in srgb,var(--ink) 8%,transparent)}
+.wc-bar.on text{fill:var(--ink);font-weight:700}
+.wc-detail{display:flex;gap:10px;justify-content:space-between;align-items:center;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:8px 12px;font-size:.92rem}
+.wc-detail[hidden]{display:none}
+.wc-detail .btn{flex:none;white-space:nowrap}
 .chart-box{overflow-x:auto}
 .chart-box svg{display:block;width:100%;min-width:300px;height:auto}
 .chart-box text{fill:var(--muted);font-family:var(--f-mono);font-size:11px}
@@ -279,13 +295,13 @@ nav.tabs button[aria-current="page"]{color:var(--accent);font-weight:600}
 .f input.mini{width:7rem}
 .seg{display:flex;gap:4px;flex-wrap:wrap}
 .seg label{flex:1 1 auto;position:relative}
-.seg input{position:absolute;opacity:0;pointer-events:none}
+.seg label>input{position:absolute;opacity:0;pointer-events:none}
 .seg span{display:flex;gap:5px;justify-content:center;align-items:center;border:1px solid var(--line);border-radius:8px;padding:.35rem .6rem;font-size:.9rem;white-space:nowrap}
 .seg input:checked+span{background:var(--ink);color:var(--bg);border-color:var(--ink);font-weight:600}
 .seg input:focus-visible+span{outline:2px solid var(--accent)}
 .checks{display:flex;flex-wrap:wrap;gap:6px}
 .checks label{position:relative}
-.checks input{position:absolute;opacity:0;pointer-events:none}
+.checks label>input{position:absolute;opacity:0;pointer-events:none}
 .checks span{display:inline-flex;gap:5px;align-items:center;border:1px solid var(--line);border-radius:999px;padding:.25rem .7rem;font-size:.9rem}
 .checks input:checked+span{background:var(--ink);border-color:var(--ink);color:var(--bg);font-weight:600}
 .checks input:focus-visible+span{outline:2px solid var(--accent)}
@@ -293,7 +309,7 @@ nav.tabs button[aria-current="page"]{color:var(--accent);font-weight:600}
 .sd.warn{background:var(--warn)} .sd.bad{background:var(--bad)}
 .addopt{border:1px dashed var(--line);background:none;border-radius:999px;min-width:2.2rem;padding:.2rem .6rem;color:var(--muted);font-size:.9rem}
 .addin{display:inline-flex;gap:4px;align-items:center}
-.addin input{width:8rem;border:1px solid var(--accent);border-radius:8px;padding:.25rem .5rem;background:var(--bg)}
+.addin input{width:9rem;font-size:1rem;border:1px solid var(--accent);border-radius:8px;padding:.25rem .5rem;background:var(--bg)}
 .recent{display:flex;flex-wrap:wrap;gap:4px}
 .recent button{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:.1rem .55rem;font-size:.8rem;color:var(--muted)}
 details.kit{border:1px dashed var(--line);border-radius:10px;padding:8px 12px}
@@ -682,8 +698,9 @@ function fieldText(f, v, l){
   }
 }
 function summary(l){
-  const parts = fieldsOf(l.type).map(f => { if (l.type === "clean" && f.k === "liters" && hasVal(l.liters) && !hasVal(l.pct)) { const p = pctOf(l); return `환수 ${l.liters}L${p != null ? ` (약 ${p}%)` : ""}`; } if (l.type === "clean" && f.k === "liters" && hasVal(l.pct) && l.pctAuto) return ""; return fieldText(f, l[f.k], l); }).filter(Boolean);
-  if (l.type === "clean" && l.pctAuto && hasVal(l.pct) && hasVal(l.liters)) { const i = parts.findIndex(x => x.startsWith("환수 ")); if (i >= 0) parts[i] = `환수 ${l.liters}L (약 ${l.pct}%)`; }
+  const wc = l.type === "clean" && (hasVal(l.pct) || hasVal(l.liters));
+  const parts = fieldsOf(l.type).map(f => (wc && (f.k === "pct" || f.k === "liters")) ? "" : fieldText(f, l[f.k], l)).filter(Boolean);
+  if (wc) parts.unshift(`환수 ${changeText(l).replace(" · ", " (") + (changeText(l).includes(" · ") ? ")" : "")}`);
   if (l.type === "water") PARAMS.forEach(p => { if (num(l[p.k]) != null) parts.push(`${p.label} ${l[p.k]}${p.unit}`); });
   return parts.join(" · ");
 }
@@ -716,6 +733,15 @@ function pctOf(l){
   if (num(l.pct) != null) return num(l.pct);
   const L = num(l.liters), vol = tankVolume(l.tankId)?.v;
   return L != null && vol ? Math.round(L / vol * 100) : null;
+}
+function litersOf(l){
+  if (num(l.liters) != null) return {v:num(l.liters), est:false};
+  const p = num(l.pct), vol = tankVolume(l.tankId)?.v;
+  return p != null && vol ? {v: Math.round(p * vol / 10) / 10, est:true} : null;
+}
+function changeText(l){
+  const p = pctOf(l), L = litersOf(l), pEst = num(l.pct) == null || (l.pctAuto && num(l.liters) != null);
+  return [p != null ? `${pEst && L ? "약 " : ""}${p}%` : "", L ? `${L.est ? "약 " : ""}${L.v}L` : ""].filter(Boolean).join(" · ");
 }
 function isChange(l){
   if (l.type !== "clean") return false;
@@ -886,7 +912,7 @@ function tankCard(t){
   const parts = {
     quick: () => `<div class="quick">${typesOn().map(ty => `<button data-act="quick" data-type="${ty.k}" data-tank-id="${tid}" style="border-color:${tint(ty.color,45)}"><span aria-hidden="true">${esc(ty.emoji)}</span>${esc(ty.label)}</button>`).join("")}</div>`,
     stats: () => { const ch = changes(t.id), gap = avgGap(ch.map(l => l.date)), inv = inventory(t.id), since = ch[0] ? diffDays(today(), ch[0].date) : null;
-      return `<div class="stats"><button class="stat" data-act="hist" data-type="clean"><span class="k">마지막 환수</span><span class="v">${since == null ? "–" : since === 0 ? "오늘" : `${since}일 전`}</span><span class="k">${ch[0] ? esc(summary(ch[0]).split(" · ")[0]) : "기록 없음"}</span></button>
+      return `<div class="stats"><button class="stat" data-act="hist" data-type="clean"><span class="k">마지막 환수</span><span class="v">${since == null ? "–" : since === 0 ? "오늘" : `${since}일 전`}</span><span class="k">${ch[0] ? esc(changeText(ch[0]) || "환수") : "기록 없음"}</span></button>
       <button class="stat" data-act="hist" data-type="clean"><span class="k">평균 환수 주기</span><span class="v">${gap ? `${gap}일` : "–"}</span><span class="k">${gap ? "최근 환수 기준" : "환수 2회부터"}</span></button>
       <button class="stat" data-act="inv-edit" data-tank-id="${tid}"><span class="k">생물 ✎</span><span class="v">${inv.reduce((s,[,n]) => s+n, 0) || "–"}</span><span class="k">${inv.length ? `${inv.length}종` : "눌러서 등록"}</span></button></div>`; },
     photo: () => { const l = state.logs.find(x => x.tankId === t.id && x.type === "photo" && (x.photos||[]).length) || state.logs.find(x => x.tankId === t.id && (x.photos||[]).length); if (!l) return "";
@@ -972,15 +998,33 @@ function histSummary(type, tanks){
   }).join("");
 }
 function pctBars(ch){
-  const span = 119, from = addDays(today(), -span), pts = ch.filter(l => l.date >= from && pctOf(l) != null);
+  const span = 119, from = addDays(today(), -span), pts = ch.filter(l => l.date >= from && pctOf(l) != null).reverse();
   if (!pts.length) return "";
-  const W = 600, H = 120, L = 30, R = 8, Tp = 8, B = 20, maxV = Math.max(50, ...pts.map(pctOf));
-  const X = d => L + (W - L - R) * diffDays(d, from) / span, Y = v => Tp + (H - Tp - B) * (1 - v / maxV);
-  let s = `<div class="chart-box"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="최근 4개월 환수량">`;
-  [0, 25, 50].filter(v => v <= maxV).forEach(v => s += `<line x1="${L}" x2="${W-R}" y1="${Y(v)}" y2="${Y(v)}" stroke="var(--line)"/><text x="${L-5}" y="${Y(v)+4}" text-anchor="end">${v}</text>`);
-  [0, .5, 1].forEach((f, i) => { const d = addDays(from, Math.round(span * f)); s += `<text x="${X(d)}" y="${H-5}" text-anchor="${["start","middle","end"][i]}">${d.slice(5).replace("-","/")}</text>`; });
-  pts.forEach(p => { const v = pctOf(p); s += `<rect x="${(X(p.date) - 3).toFixed(1)}" y="${Y(v).toFixed(1)}" width="6" height="${(Y(0) - Y(v)).toFixed(1)}" rx="2" fill="${typeOf("clean").color}"><title>${p.date} · ${v}%</title></rect>`; });
-  return s + `</svg></div>`;
+  const PX = 6, L = 12, R = 26, Tp = 38, B = 24, H = 206, W = L + R + span * PX, YW = 40;
+  const top = Math.max(...pts.map(pctOf)), step = top > 60 ? 20 : 10, maxV = Math.max(30, Math.ceil(top / step) * step);
+  const X = d => L + PX * diffDays(d, from), Y = v => Tp + (H - Tp - B) * (1 - v / maxV);
+  const ticks = []; for (let v = 0; v <= maxV; v += step) ticks.push(v);
+  const col = typeOf("clean").color;
+  let ax = `<svg class="wc-axis" width="${YW}" height="${H}" viewBox="0 0 ${YW} ${H}" aria-hidden="true">${ticks.map(v => `<text x="${YW-6}" y="${Y(v)+4}" text-anchor="end">${v}%</text>`).join("")}</svg>`;
+  let s = `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="최근 4개월 환수량(%) 막대 그래프. 막대를 누르면 그날 기록이 보여요">`;
+  ticks.forEach(v => s += `<line x1="0" x2="${W}" y1="${Y(v)}" y2="${Y(v)}" stroke="var(--line)" ${v ? 'stroke-dasharray="2 3"' : ""}/>`);
+  for (let d = parse(from), i = 0; i <= span; i++, d.setDate(d.getDate() + 1)) if (d.getDate() === 1) { const x = X(iso(d)); s += `<line x1="${x}" x2="${x}" y1="4" y2="${Y(0)}" stroke="var(--line)"/><text x="${x+4}" y="14" class="mo">${d.getMonth()+1}월</text>`; }
+  let lastLabelX = Infinity;
+  [...pts].reverse().forEach(p => { const x = X(p.date); p._lab = lastLabelX - x >= 30; if (p._lab) lastLabelX = x; });
+  pts.forEach(p => { const v = pctOf(p), x = X(p.date), y = Y(Math.min(v, maxV)), d = parse(p.date);
+    s += `<g class="wc-bar" data-act="wc-pop" data-id="${esc(p.id)}" tabindex="0" role="button" aria-label="${d.getMonth()+1}월 ${d.getDate()}일 환수 ${v}%"><rect class="hit" x="${x-12}" y="0" width="24" height="${H}" fill="transparent"/><rect class="bar" x="${x-4}" y="${y.toFixed(1)}" width="8" height="${Math.max(2, Y(0) - y).toFixed(1)}" rx="3" fill="${col}"/><text x="${x}" y="${(y-5).toFixed(1)}" text-anchor="middle" class="val">${v}</text>${p._lab ? `<text x="${x}" y="${H-7}" text-anchor="middle">${d.getMonth()+1}/${d.getDate()}</text>` : `<line x1="${x}" x2="${x}" y1="${Y(0)}" y2="${Y(0)+4}" stroke="var(--muted)"/>`}</g>`; delete p._lab; });
+  s += `</svg>`;
+  return `<div class="wc-chart"><div class="row between"><b class="small">환수량 (%) · 최근 4개월</b><span class="muted small">막대를 누르면 기록이 보여요</span></div><div class="wc-plot">${ax}<div class="wc-scroll">${s}</div></div><div class="wc-detail" hidden></div></div>`;
+}
+function wcPop(g){
+  const l = state.logs.find(x => x.id === g.dataset.id), box = g.closest(".wc-chart"), out = box?.querySelector(".wc-detail"); if (!l || !out) return;
+  const was = g.classList.contains("on");
+  box.querySelectorAll(".wc-bar.on").forEach(x => x.classList.remove("on"));
+  if (was) { out.hidden = true; return; }
+  g.classList.add("on");
+  const f = fieldOf("clean","tasks"), tasks = (l.tasks || []).filter(x => roleOf(f, x) !== "wc");
+  out.hidden = false;
+  out.innerHTML = `<div><b>${fmtDay(l.date)}</b> <span class="muted small">${ago(l.date)}</span><br><span>환수 ${esc(changeText(l))}</span>${tasks.length ? `<span class="muted"> · ${esc(tasks.join(", "))}</span>` : ""}${l.memo ? `<br><span class="small muted" style="white-space:pre-line">${esc(l.memo)}</span>` : ""}</div><button class="btn sm" data-act="edit-log" data-id="${esc(l.id)}">기록 열기 ›</button>`;
 }
 function vHist(){
   const H = state.hist, T = typeOf(H.type);
@@ -1455,7 +1499,7 @@ const txt = (id, label, val, ph = "") => `<div class="f full"><label for="${id}"
 
 function fieldHtml(type, f, v){
   const val = v[f.k], id = `f_${f.k}`;
-  const lab = `<span class="lb" id="lb-${f.k}">${esc(f.label)}${f.kind === "num" && f.unit ? ` (${esc(f.unit)})` : ""}</span>`;
+  const lab = `<span class="lb" id="lb-${f.k}">${esc(f.label)}${f.kind === "num" && f.unit && !f.label.includes(`(${f.unit})`) ? ` (${esc(f.unit)})` : ""}</span>`;
   if (f.kind === "single" || f.kind === "multi" || f.kind === "pct") {
     const multi = f.kind === "multi", isPct = f.kind === "pct";
     const opts = (f.options || []).map(x => x.v);
@@ -1544,6 +1588,7 @@ function openLogForm(prefill = {}, opt = {}){
     <div class="typegrid" role="group" aria-label="기록 종류">${typeList.map(t => `<button type="button" class="typebtn" data-type="${t.k}" aria-pressed="${t.k===v.type}" style="${t.k===v.type?`background:${tint(t.color,22)}`:""}"><span aria-hidden="true">${esc(t.emoji)}</span>${esc(t.label)}</button>`).join("")}</div>
     <form id="logForm" novalidate>
       <div class="fields three" style="margin-bottom:14px">${sel("tankId","어항",state.tanks.map(t => [t.id, `${tankEmoji(t.id)} ${t.name}`]),v.tankId)}${inp("date","날짜",v.date,'type="date" required')}${inp("time","시각",v.time,'type="time"')}</div>
+      <div id="alsoTanks"></div>
       <div id="typeFields">${typeFieldsHtml(v.type, v)}</div>
       <div class="fields" style="margin-top:12px">${txt("memo","메모",v.memo,"자유롭게 적어 두세요")}</div>
       <div class="f full" style="margin-top:12px"><span class="lb">사진</span><div class="ph-grid" id="phGrid"></div><span class="hint" id="phHint"></span></div>
@@ -1568,6 +1613,12 @@ function openLogForm(prefill = {}, opt = {}){
       }
     };
     drawPhotos();
+    const drawAlso = () => {
+      const box = sh.querySelector("#alsoTanks"), main = form.querySelector("#tankId").value, keep = [...box.querySelectorAll("input:checked")].map(x => x.value);
+      const others = state.tanks.filter(t => t.id !== main);
+      box.innerHTML = editing() || !others.length ? "" : `<div class="f full" style="margin-bottom:14px"><span class="lb" id="lb-also">같이 기록할 어항 <span class="muted" style="font-weight:400">· 고르면 같은 기록이 그 어항에도 저장돼요</span></span><div class="checks" role="group" aria-labelledby="lb-also">${others.map(t => `<label><input type="checkbox" name="alsoTank" value="${esc(t.id)}" ${keep.includes(t.id) ? "checked" : ""}><span>${esc(tankLabel(t.id))}</span></label>`).join("")}</div></div>`;
+    };
+    drawAlso();
     sheetCleanup = () => { if (!saved && assets) fresh.forEach(id => assets.delete(id).catch(() => {})); };
     const curValues = () => ({...bag, ...collectFields(type, form, {...bag, type}), type, memo: sh.querySelector("#memo").value});
     const redrawFields = vals => { sh.querySelector("#typeFields").innerHTML = typeFieldsHtml(type, vals); };
@@ -1576,7 +1627,7 @@ function openLogForm(prefill = {}, opt = {}){
       const freshOnly = photos.filter(p => fresh.includes(p.id));
       if (mode === "new") { d.value = today(); tm.value = ""; delete v.id; delete v.created; delete v.src; photos = freshOnly; if (memo.value === (qe.memo || "")) memo.value = ""; }
       else { d.value = qe.date; tm.value = qe.time || ""; v.id = qe.id; v.created = qe.created; if (qe.src) v.src = qe.src; photos = [...(qe.photos || []), ...freshOnly]; if (!memo.value.trim()) memo.value = qe.memo || ""; }
-      drawPhotos();
+      drawPhotos(); drawAlso();
       sh.querySelector("#formTitle").textContent = mode === "edit" ? "기록 수정" : "새 기록";
     }));
     sh.addEventListener("pointerdown", e => { const lb = e.target.closest(".seg label"); if (lb) { const i = lb.querySelector("input"); lb.dataset.prev = i && i.checked ? "1" : ""; } }, true);
@@ -1587,7 +1638,7 @@ function openLogForm(prefill = {}, opt = {}){
       if (fl) { const i = sh.querySelector("#" + fl.dataset.fill); if (i) { if (fl.dataset.append && i.value.trim()) { const names = splitNames(i.value); if (!names.includes(fl.dataset.val)) i.value = [...names, fl.dataset.val].join(", "); } else i.value = fl.dataset.val; } return; }
       const rm = e.target.closest("[data-ph-rm]"); if (rm) { const [p] = photos.splice(Number(rm.dataset.phRm), 1); if (p) removed.push(p.id); drawPhotos(); return; }
       const ao = e.target.closest("[data-addopt]");
-      if (ao) { ao.outerHTML = `<span class="addin"><input type="text" id="addin-${ao.dataset.addopt}" placeholder="새 선택지" aria-label="새 선택지"><button type="button" class="btn sm" data-addopt-save="${ao.dataset.addopt}">추가</button></span>`; sh.querySelector(`#addin-${ao.dataset.addopt}`)?.focus(); return; }
+      if (ao) { ao.outerHTML = `<span class="addin"><input type="text" id="addin-${ao.dataset.addopt}" placeholder="새 선택지" aria-label="새 선택지" enterkeyhint="done" autocomplete="off"><button type="button" class="btn sm" data-addopt-save="${ao.dataset.addopt}">추가</button></span>`; sh.querySelector(`#addin-${ao.dataset.addopt}`)?.focus(); return; }
       const as = e.target.closest("[data-addopt-save]");
       if (as) { addOptInForm(sh, form, type, as.dataset.addoptSave, curValues); return; }
       const tb = e.target.closest(".typebtn");
@@ -1625,11 +1676,11 @@ function openLogForm(prefill = {}, opt = {}){
     autoPct();
     sh.addEventListener("input", e => {
       if (e.target.id === "f_pct-c") { if (e.target.value) form.querySelectorAll('input[name="pct"]').forEach(r => r.checked = false); pctTouched = !!e.target.value; pctAuto = false; autoPct(); }
-      if (e.target.id === "f_liters") autoPct();
+      if (e.target.id === "f_liters") { pctTouched = false; autoPct(); }
     });
     sh.addEventListener("change", e => {
       if (e.target.name === "pct" && e.target.type === "radio") { pctTouched = true; pctAuto = false; autoPct(); }
-      if (e.target.id === "tankId") autoPct();
+      if (e.target.id === "tankId") { drawAlso(); autoPct(); }
       if (e.target.id === "stripIn" && e.target.files?.[0]) {
         const file = e.target.files[0], hint = sh.querySelector("#stripHint");
         hint.textContent = "🤖 사진을 읽는 중…";
@@ -1664,10 +1715,11 @@ function openLogForm(prefill = {}, opt = {}){
         const h2 = sh.querySelector("#stripHint");
         if (h2) h2.textContent = got.length ? `✓ ${got.map(p => `${p.label} ${vals[p.k]}`).join(", ")} 채웠어요${r.confidence === "low" ? " · ⚠️ 판독 확신 낮음, 다시 찍어 보세요" : ""}` : (r.note || "읽을 수 있는 값이 없었어요");
       } });
-    sh.addEventListener("keydown", e => { if (e.key === "Enter" && e.target.id?.startsWith("addin-")) { e.preventDefault(); addOptInForm(sh, form, type, e.target.id.slice(6), curValues); } });
+    sh.addEventListener("keydown", e => { if ((e.key === "Enter" || e.keyCode === 13) && e.target.id?.startsWith("addin-")) { e.preventDefault(); if (e.isComposing) return; addOptInForm(sh, form, type, e.target.id.slice(6), curValues); } });
     sh.addEventListener("paste", e => { if (e.target.id === "stripPaste") setTimeout(() => sh.querySelector("#stripApply")?.click(), 0); });
     form.addEventListener("submit", async e => {
       e.preventDefault();
+      { const ai = document.activeElement; if (ai && ai.id?.startsWith("addin-")) { addOptInForm(sh, form, type, ai.id.slice(6), curValues); return; } }
       { const sp = sh.querySelector("#stripPaste"); if (sp && sp.value.trim() && sp.dataset.applied !== sp.value) sh.querySelector("#stripApply").click(); }
       if (uploading) { toast("사진을 올리는 중이에요. 잠시만요"); return; }
       const fd = new FormData(form), g = k => (fd.get(k) ?? "").toString().trim();
@@ -1682,9 +1734,15 @@ function openLogForm(prefill = {}, opt = {}){
       const b = sh.querySelector("#saveBtn"); b.disabled = true;
       const id = await dbSet("logs", v.id || null, rec); b.disabled = false;
       if (!id) return;
+      const also = v.id ? [] : fd.getAll("alsoTank").map(String).filter(t => t !== rec.tankId && tankById(t));
+      for (const t of also) {
+        const r2 = {...clone(rec), tankId:t, created:Date.now()}; delete r2.photos; delete r2.aiTodo; delete r2.src;
+        if (type === "clean" && r2.pctAuto) { const vol = tankVolume(t)?.v; if (vol && num(r2.liters) != null) r2.pct = Math.min(100, Math.round(r2.liters / vol * 100)); else { delete r2.pct; delete r2.pctAuto; } }
+        await dbSet("logs", null, r2);
+      }
       saved = true; if (assets) removed.forEach(pid => assets.delete(pid).catch(() => {}));
       if (opt.remId) { const r = state.reminders.find(x => x.id === opt.remId); if (r) await completeRem(r); }
-      closeSheet(); toast(v.id ? "수정했어요" : "기록했어요");
+      closeSheet(); toast(v.id ? "수정했어요" : also.length ? `어항 ${also.length + 1}곳에 기록했어요` : "기록했어요");
       aiOnRecord(typeof id === "string" ? id : v.id, rec);
     });
   });
@@ -2119,6 +2177,7 @@ document.addEventListener("click", e => {
   const leaveSheet = () => { if (inSheet) closeSheet({noBack:true}); };
   switch (b.dataset.act) {
     case "close": closeSheet(); break;
+    case "wc-pop": wcPop(b); break;
     case "nav-back": case "back": case "back-settings": navBack(); break;
     case "nav-log": go("log"); break;
     case "recent-type": state.recentType = b.dataset.type || ""; render(); break;
