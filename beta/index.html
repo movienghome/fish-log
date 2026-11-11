@@ -308,6 +308,15 @@ nav.tabs button[aria-current="page"]{color:var(--accent);font-weight:600}
 .sd{width:.45rem;height:.45rem;border-radius:50%;display:inline-block;flex:none}
 .sd.warn{background:var(--warn)} .sd.bad{background:var(--bad)}
 .addopt{border:1px dashed var(--line);background:none;border-radius:999px;min-width:2.2rem;padding:.2rem .6rem;color:var(--muted);font-size:.9rem}
+.moverow{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.moverow .from{border:1px solid var(--line);border-radius:9px;padding:.45rem .7rem;background:var(--sunk);font-weight:600}
+.moverow select{flex:1;min-width:8rem}
+.typebtn.act{box-shadow:inset 0 0 0 1.5px var(--ink)}
+.selbar{display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:.88rem;color:var(--muted)}
+.selbar .sc{display:inline-flex;align-items:center;border:1px solid var(--line);border-radius:999px;overflow:hidden;background:var(--surface);color:var(--ink)}
+.selbar .sc.on{background:var(--ink);color:var(--bg);border-color:var(--ink);font-weight:600}
+.selbar .sc button{border:none;background:none;color:inherit;padding:.25rem .55rem;font-size:.88rem}
+.selbar .sc button+button{padding-left:.2rem;opacity:.75}
 .addin{display:inline-flex;gap:4px;align-items:center}
 .addin input{width:9rem;font-size:1rem;border:1px solid var(--accent);border-radius:8px;padding:.25rem .5rem;background:var(--bg)}
 .recent{display:flex;flex-wrap:wrap;gap:4px}
@@ -465,7 +474,7 @@ const FIELD_DEFS = {
     {k:"subject", label:"대상", kind:"text", ph:"비우면 전체", species:true},
     {k:"reaction", label:"먹이 반응", kind:"scale5"}],
   maint:[
-    {k:"category", label:"종류", kind:"single", sum:"value", options:o("유목·돌 추가","레이아웃 변경","장비 교체·추가","어항 이동","기타")},
+    {k:"category", label:"종류", kind:"multi", sum:"value", options:o("유목·돌 추가","레이아웃 변경","장비 교체·추가","어항 이동","기타")},
     {k:"product", label:"대상", kind:"text", sum:"value"},
     {k:"amount", label:"양", kind:"text", sum:"value"}],
   livestock:[
@@ -693,7 +702,7 @@ function fieldText(f, v, l){
     case "scale5": return `${f.label} ${v}/5`;
     case "num": return f.sum === "value" ? `${v}${f.unit || ""}` : `${f.label} ${v}${f.unit || ""}`;
     case "pct": return `환수 ${v}%`;
-    case "tank": return `→ ${tankName(v)}`;
+    case "tank": return `${tankName(l.tankId)} → ${tankName(v)}`;
     default: return f.sum === "value" ? String(v) : `${f.label} ${v}`;
   }
 }
@@ -711,8 +720,8 @@ function fieldChips(l){
     let st = "";
     if (f.kind === "single") st = optOf(f, v)?.st || "";
     if (f.kind === "multi") st = worst((Array.isArray(v) ? v : [v]).map(x => optOf(f, x)?.st)) || "";
-    const val = f.kind === "multi" ? (Array.isArray(v) ? v.join(", ") : v) : f.kind === "scale5" ? `${v}/5` : f.kind === "pct" ? `${v}%` : f.kind === "num" ? `${v}${f.unit || ""}` : f.kind === "tank" ? tankName(v) : v;
-    out.push(`<span class="fc ${st === "ok" ? "" : st}"><span class="k">${esc(f.label)}</span>${esc(val)}</span>`);
+    const val = f.kind === "multi" ? (Array.isArray(v) ? v.join(", ") : v) : f.kind === "scale5" ? `${v}/5` : f.kind === "pct" ? `${v}%` : f.kind === "num" ? `${v}${f.unit || ""}` : f.kind === "tank" ? `${tankName(l.tankId)} → ${tankName(v)}` : v;
+    out.push(`<span class="fc ${st === "ok" ? "" : st}"><span class="k">${esc(f.kind === "tank" ? "어항 이동" : f.label)}</span>${esc(val)}</span>`);
   });
   if (l.type === "water") PARAMS.forEach(p => { const n = num(l[p.k]); if (n != null) { const s = pStatus(p, n); out.push(`<span class="fc ${s}"><span class="k">${p.label}</span>${n}${p.unit} ${({ok:"✓",warn:"▲",bad:"✕"})[s]}</span>`); } });
   return out.join("");
@@ -1510,7 +1519,8 @@ function fieldHtml(type, f, v){
     return `<div class="f full" data-fk="${f.k}">${lab}<div class="${multi ? "checks" : "seg"}" role="${multi ? "group" : "radiogroup"}" aria-labelledby="lb-${f.k}">${inputs}<button type="button" class="addopt" data-addopt="${f.k}" aria-label="${esc(f.label)} 선택지 추가">＋</button></div>${isPct ? `<div class="row" style="gap:6px;margin-top:4px"><input class="mini" type="number" inputmode="numeric" min="0" max="100" id="${id}-c" name="${f.k}_c" placeholder="직접 입력" value="${esc(custom)}" aria-label="${esc(f.label)} 직접 입력" style="width:7rem;border:1px solid var(--line);border-radius:9px;padding:.4rem .6rem;background:var(--bg)"><span class="muted small">%</span></div>` : ""}</div>`;
   }
   if (f.kind === "scale5") return `<div class="f" data-fk="${f.k}">${lab}<div class="seg" role="radiogroup" aria-labelledby="lb-${f.k}">${[1,2,3,4,5].map(i => `<label><input type="radio" name="${f.k}" id="${id}-${i}" value="${i}" ${Number(val) === i ? "checked" : ""}><span>${i}</span></label>`).join("")}</div></div>`;
-  if (f.kind === "tank") return `<div class="f" data-fk="${f.k}">${lab}<select id="${id}" name="${f.k}" aria-labelledby="lb-${f.k}"><option value="">(없음)</option>${state.tanks.map(t => `<option value="${esc(t.id)}" ${val === t.id ? "selected" : ""}>${esc(tankLabel(t.id))}</option>`).join("")}</select></div>`;
+  if (f.kind === "tank") { const from = v.tankId;
+    return `<div class="f full" data-fk="${f.k}"><span class="lb" id="lb-${f.k}">다른 어항으로 옮김 <span class="muted" style="font-weight:400">· 옮길 때만 고르세요</span></span><div class="moverow"><span class="from" data-from-tank>${esc(tankLabel(from))}</span><span aria-hidden="true">→</span><select id="${id}" name="${f.k}" aria-labelledby="lb-${f.k}"><option value="">옮기지 않음</option>${state.tanks.filter(t => t.id !== from || t.id === val).map(t => `<option value="${esc(t.id)}" ${val === t.id ? "selected" : ""}>${esc(tankLabel(t.id))}</option>`).join("")}</select></div><span class="hint">왼쪽 어항에서 마릿수가 빠지고, 오른쪽 어항에 그만큼 더해져요.</span></div>`; }
   if (f.kind === "num") return `<div class="f" data-fk="${f.k}">${lab}<input id="${id}" name="${f.k}" type="number" inputmode="decimal" step="any" value="${esc(val ?? "")}" aria-labelledby="lb-${f.k}"></div>`;
   const recent = (f.recent || f.species) ? recentVals(type, f) : [];
   return `<div class="f ${f.recent ? "full" : ""}" data-fk="${f.k}">${lab}<input id="${id}" name="${f.k}" value="${esc(val ?? "")}" placeholder="${esc(f.ph || "")}" ${recent.length ? `list="${id}-dl"` : ""} aria-labelledby="lb-${f.k}">${recent.length ? `<datalist id="${id}-dl">${recent.map(s => `<option value="${esc(s)}">`).join("")}</datalist><div class="recent">${recent.slice(0, 6).map(s => `<button type="button" data-fill="${id}" data-val="${esc(s)}" data-append="${f.k === "plant" ? "1" : ""}">${esc(s)}</button>`).join("")}</div>` : ""}</div>`;
@@ -1586,17 +1596,31 @@ function openLogForm(prefill = {}, opt = {}){
     ${qe ? `<div class="modebar" role="radiogroup" aria-label="저장 방식"><label><input type="radio" name="qeMode" value="new" ${mode==="new"?"checked":""}><span>오늘 새 기록으로</span></label><label><input type="radio" name="qeMode" value="edit" ${mode==="edit"?"checked":""}><span>${qe.date.slice(5).replace("-","/")} 기록 고치기</span></label></div><p class="hint" style="margin:-6px 0 0">지난 기록(${fmtDay(qe.date)}) 내용을 불러왔어요. 바뀐 것만 고치면 돼요.</p>` : ""}
     <div id="remSkip"></div>
     <div class="typegrid" role="group" aria-label="기록 종류">${typeList.map(t => `<button type="button" class="typebtn" data-type="${t.k}" aria-pressed="${t.k===v.type}" style="${t.k===v.type?`background:${tint(t.color,22)}`:""}"><span aria-hidden="true">${esc(t.emoji)}</span>${esc(t.label)}</button>`).join("")}</div>
+    <div class="selbar" id="selBar"></div>
     <form id="logForm" novalidate>
       <div class="fields three" style="margin-bottom:14px">${sel("tankId","어항",state.tanks.map(t => [t.id, `${tankEmoji(t.id)} ${t.name}`]),v.tankId)}${inp("date","날짜",v.date,'type="date" required')}${inp("time","시각",v.time,'type="time"')}</div>
       <div id="alsoTanks"></div>
       <div id="typeFields">${typeFieldsHtml(v.type, v)}</div>
-      <div class="fields" style="margin-top:12px">${txt("memo","메모",v.memo,"자유롭게 적어 두세요")}</div>
+      <div class="fields" style="margin-top:12px">${txt("memo","메모",v.memo,"자유롭게 적어 두세요")}</div><span class="hint" id="memoHint"></span>
       <div class="f full" style="margin-top:12px"><span class="lb">사진</span><div class="ph-grid" id="phGrid"></div><span class="hint" id="phHint"></span></div>
       <div class="row between" style="margin-top:16px"><span class="row" id="delZone">${v.id ? `<button type="button" class="btn danger" data-act="f-del-ask">삭제</button><button type="button" class="btn" data-act="f-dup">복제</button>` : ""}</span><span class="row"><button type="button" class="btn sm" data-act="f-type-edit">항목 편집</button><button class="btn primary" type="submit" id="saveBtn">저장</button></span></div>
     </form>`;
   openSheet(html, sh => {
     let type = v.type, uploading = 0, bag = {...v}, stripTodo = null;
     const form = sh.querySelector("#logForm");
+    // several kinds in one go: "sel" is what will be saved, "type" is the one on screen, "bags" hold the others
+    let sel = [v.type], touched = false; const bags = {}, implicit = !prefill.type && !qe;
+    const park = () => { bags[type] = {...bag, ...collectFields(type, form, {...bag, type}), type}; if (type === "clean") bags.clean.pctAuto = pctAuto; };
+    const seedType = t => { const b = {type:t}; if (PREFILL_FROM_LAST.includes(t)) { const last = lastOf(form.querySelector("#tankId").value, t); if (last) { if (last.pctAuto) b.pctAuto = true; fieldsOf(t).forEach(f => { if (hasVal(last[f.k]) && f.kind !== "text" || (t === "feed" && f.k === "food" && hasVal(last.food))) b[f.k] = clone(last[f.k]); }); } } return b; };
+    const drawSel = () => {
+      sh.querySelectorAll(".typebtn").forEach(x => { const on = sel.includes(x.dataset.type); x.setAttribute("aria-pressed", on); x.classList.toggle("act", on && sel.length > 1 && x.dataset.type === type); x.style.background = on ? tint(typeOf(x.dataset.type).color, 22) : ""; });
+      { const c = sel.includes("photo") ? "photo" : sel[0], mh = sh.querySelector("#memoHint"); if (mh) mh.textContent = !editing() && sel.length > 1 ? `메모와 사진은 ${typeOf(c).emoji} ${typeOf(c).label} 기록 하나에만 붙어요` : ""; }
+      const bar = sh.querySelector("#selBar");
+      bar.innerHTML = editing() ? "" : sel.length > 1 ? `<span>한 번에 저장 ${sel.length}건 ·</span>${sel.map(t => { const ty = typeOf(t); return `<span class="sc ${t === type ? "on" : ""}"><button type="button" data-selgo="${t}" aria-pressed="${t === type}">${esc(ty.emoji)} ${esc(ty.label)}${t === type ? " 입력 중" : ""}</button><button type="button" data-selrm="${t}" aria-label="${esc(ty.label)} 빼기">✕</button></span>`; }).join("")}` : `<span>다른 종류도 누르면 한 번에 같이 기록돼요</span>`;
+    };
+    const showType = nt => { type = nt; bag = bags[nt] || seedType(nt); if (nt === "clean") { pctTouched = hasVal(bag.pct) && !bag.pctAuto; pctAuto = !!bag.pctAuto; } redrawFields({...bag, type}); autoPct(); drawSel(); };
+    sh.querySelector("#typeFields").addEventListener("input", () => { touched = true; });
+    sh.querySelector("#typeFields").addEventListener("change", () => { touched = true; });
     const drawPhotos = () => {
       sh.querySelector("#phGrid").innerHTML = photos.map((p,i) => `<span class="ph"><img src="${esc(p.url)}" alt="첨부 사진 ${i+1}"><button type="button" data-ph-rm="${i}" aria-label="사진 빼기">✕</button></span>`).join("") + (uploading ? `<span class="ph-add">올리는 중…</span>` : "") + (photos.length < 6 ? `<label class="ph-add">＋ 사진<input type="file" accept="image/*" multiple id="phInput" aria-label="사진 추가"></label>` : "");
       sh.querySelector("#phInput")?.addEventListener("change", onFiles);
@@ -1620,14 +1644,15 @@ function openLogForm(prefill = {}, opt = {}){
     };
     drawAlso();
     sheetCleanup = () => { if (!saved && assets) fresh.forEach(id => assets.delete(id).catch(() => {})); };
-    const curValues = () => ({...bag, ...collectFields(type, form, {...bag, type}), type, memo: sh.querySelector("#memo").value});
-    const redrawFields = vals => { sh.querySelector("#typeFields").innerHTML = typeFieldsHtml(type, vals); };
+    const curValues = () => ({...bag, ...collectFields(type, form, {...bag, type}), type, tankId: form.querySelector("#tankId").value, memo: sh.querySelector("#memo").value});
+    const redrawFields = vals => { sh.querySelector("#typeFields").innerHTML = typeFieldsHtml(type, {...vals, tankId: form.querySelector("#tankId").value}); };
     if (qe) sh.querySelectorAll('input[name="qeMode"]').forEach(r => r.addEventListener("change", () => {
       mode = r.value; const d = form.querySelector("#date"), tm = form.querySelector("#time"), memo = sh.querySelector("#memo");
       const freshOnly = photos.filter(p => fresh.includes(p.id));
       if (mode === "new") { d.value = today(); tm.value = ""; delete v.id; delete v.created; delete v.src; photos = freshOnly; if (memo.value === (qe.memo || "")) memo.value = ""; }
       else { d.value = qe.date; tm.value = qe.time || ""; v.id = qe.id; v.created = qe.created; if (qe.src) v.src = qe.src; photos = [...(qe.photos || []), ...freshOnly]; if (!memo.value.trim()) memo.value = qe.memo || ""; }
-      drawPhotos(); drawAlso();
+      if (mode === "edit" && sel.length > 1) { sel = [type]; }
+      drawPhotos(); drawAlso(); drawSel();
       sh.querySelector("#formTitle").textContent = mode === "edit" ? "기록 수정" : "새 기록";
     }));
     sh.addEventListener("pointerdown", e => { const lb = e.target.closest(".seg label"); if (lb) { const i = lb.querySelector("input"); lb.dataset.prev = i && i.checked ? "1" : ""; } }, true);
@@ -1641,12 +1666,20 @@ function openLogForm(prefill = {}, opt = {}){
       if (ao) { ao.outerHTML = `<span class="addin"><input type="text" id="addin-${ao.dataset.addopt}" placeholder="새 선택지" aria-label="새 선택지" enterkeyhint="done" autocomplete="off"><button type="button" class="btn sm" data-addopt-save="${ao.dataset.addopt}">추가</button></span>`; sh.querySelector(`#addin-${ao.dataset.addopt}`)?.focus(); return; }
       const as = e.target.closest("[data-addopt-save]");
       if (as) { addOptInForm(sh, form, type, as.dataset.addoptSave, curValues); return; }
+      const go2 = e.target.closest("[data-selgo]"), rm2 = e.target.closest("[data-selrm]");
+      if (rm2) { const t = rm2.dataset.selrm; if (sel.length < 2) return; if (t !== type) park(); sel = sel.filter(x => x !== t); delete bags[t]; if (t === type) showType(sel[sel.length - 1]); else drawSel(); return; }
+      if (go2) { if (go2.dataset.selgo !== type) { park(); showType(go2.dataset.selgo); } return; }
       const tb = e.target.closest(".typebtn");
+      if (tb && !editing() && !(sel.length === 1 && implicit && !touched)) {
+        const nt = tb.dataset.type; if (nt === type) return;
+        park(); if (!sel.includes(nt)) sel.push(nt); showType(nt);
+        return;
+      }
       if (tb && tb.dataset.type !== type) {
         bag = {...bag, ...collectFields(type, form, {...bag, type})};
         const nt = tb.dataset.type, mapped = convertRecord({...bag, type, memo:""}, nt);
         type = nt;
-        sh.querySelectorAll(".typebtn").forEach(x => { const on = x === tb; x.setAttribute("aria-pressed", on); x.style.background = on ? tint(typeOf(x.dataset.type).color, 22) : ""; });
+        sel = [nt]; drawSel();
         const vals = {...bag, type}; fieldsOf(nt).forEach(f => { if (hasVal(mapped[f.k])) vals[f.k] = mapped[f.k]; });
         redrawFields(vals); autoPct();
         return;
@@ -1673,14 +1706,14 @@ function openLogForm(prefill = {}, opt = {}){
       form.querySelectorAll('input[name="pct"]').forEach(r => r.checked = false); c.value = pct; pctAuto = true;
       hint.textContent = `${L}L ÷ 물 양 ${vol.v}L${vol.est ? " (크기로 어림, 어항 편집에서 바꿀 수 있어요)" : ""} ≈ ${pct}% 로 자동 입력했어요`;
     };
-    autoPct();
+    autoPct(); drawSel();
     sh.addEventListener("input", e => {
       if (e.target.id === "f_pct-c") { if (e.target.value) form.querySelectorAll('input[name="pct"]').forEach(r => r.checked = false); pctTouched = !!e.target.value; pctAuto = false; autoPct(); }
       if (e.target.id === "f_liters") { pctTouched = false; autoPct(); }
     });
     sh.addEventListener("change", e => {
       if (e.target.name === "pct" && e.target.type === "radio") { pctTouched = true; pctAuto = false; autoPct(); }
-      if (e.target.id === "tankId") { drawAlso(); autoPct(); }
+      if (e.target.id === "tankId") { drawAlso(); if (form.querySelector("[data-from-tank]")) { bag = {...bag, ...collectFields(type, form, {...bag, type})}; if (bag.toTank === e.target.value) bag.toTank = ""; redrawFields({...bag, type, tankId:e.target.value}); } autoPct(); }
       if (e.target.id === "stripIn" && e.target.files?.[0]) {
         const file = e.target.files[0], hint = sh.querySelector("#stripHint");
         hint.textContent = "🤖 사진을 읽는 중…";
@@ -1723,27 +1756,41 @@ function openLogForm(prefill = {}, opt = {}){
       { const sp = sh.querySelector("#stripPaste"); if (sp && sp.value.trim() && sp.dataset.applied !== sp.value) sh.querySelector("#stripApply").click(); }
       if (uploading) { toast("사진을 올리는 중이에요. 잠시만요"); return; }
       const fd = new FormData(form), g = k => (fd.get(k) ?? "").toString().trim();
-      const rec = {type, tankId:g("tankId"), date:g("date") || today(), time:g("time"), memo:g("memo"), created:v.created || Date.now(), ...collectFields(type, form, {...bag, type:bag.type})};
-      if (v.id && v.type && type !== v.type) { const lost = convertRecord(v, type)._lost; if (lost && !rec.memo.includes(lost)) rec.memo = [rec.memo, lost].filter(Boolean).join("\n"); }
-      if (type === "photo" && !photos.length) { toast("사진을 한 장 이상 올려 주세요"); return; }
-      if (photos.length) rec.photos = photos;
-      if (v.src) rec.src = v.src;
-      if (type === "water") { const td = stripTodo || v.aiTodo; if (td && td.length) rec.aiTodo = td; }
-      if (type === "clean" && pctAuto && hasVal(rec.pct) && hasVal(rec.liters)) rec.pctAuto = true;
-      Object.keys(rec).forEach(k => { if (!hasVal(rec[k])) delete rec[k]; });
+      const multi = !v.id && sel.length > 1; if (multi) park();
+      const types = multi ? sel : [type];
+      const pick = t => { const b = bags[t] || {}, r = {}; fieldsOf(t).forEach(f => { if (hasVal(b[f.k])) r[f.k] = b[f.k]; }); if (t === "water") PARAMS.forEach(p => { if (num(b[p.k]) != null) r[p.k] = b[p.k]; }); return r; };
+      if (types.includes("photo") && !photos.length) { toast("사진을 한 장 이상 올려 주세요"); return; }
+      const carrier = types.includes("photo") ? "photo" : types[0];   // memo and photos go on one record only
+      const recs = types.map((t, i) => {
+        const rec = {type:t, tankId:g("tankId"), date:g("date") || today(), time:g("time"), memo: t === carrier ? g("memo") : "", created:(v.created || Date.now()) + i, ...(multi ? pick(t) : collectFields(t, form, {...bag, type:bag.type}))};
+        if (v.id && v.type && t !== v.type) { const lost = convertRecord(v, t)._lost; if (lost && !rec.memo.includes(lost)) rec.memo = [rec.memo, lost].filter(Boolean).join("\n"); }
+        if (t === carrier && photos.length) rec.photos = photos;
+        if (v.src) rec.src = v.src;
+        if (t === "water") { const td = stripTodo || v.aiTodo; if (td && td.length) rec.aiTodo = td; }
+        if (t === "clean" && pctAuto && hasVal(rec.pct) && hasVal(rec.liters)) rec.pctAuto = true;
+        Object.keys(rec).forEach(k => { if (!hasVal(rec[k])) delete rec[k]; });
+        return rec;
+      });
       const b = sh.querySelector("#saveBtn"); b.disabled = true;
-      const id = await dbSet("logs", v.id || null, rec); b.disabled = false;
-      if (!id) return;
-      const also = v.id ? [] : fd.getAll("alsoTank").map(String).filter(t => t !== rec.tankId && tankById(t));
-      for (const t of also) {
-        const r2 = {...clone(rec), tankId:t, created:Date.now()}; delete r2.photos; delete r2.aiTodo; delete r2.src;
-        if (type === "clean" && r2.pctAuto) { const vol = tankVolume(t)?.v; if (vol && num(r2.liters) != null) r2.pct = Math.min(100, Math.round(r2.liters / vol * 100)); else { delete r2.pct; delete r2.pctAuto; } }
-        await dbSet("logs", null, r2);
+      const also = v.id ? [] : fd.getAll("alsoTank").map(String).filter(t => t !== recs[0].tankId && tankById(t));
+      const ids = [];
+      for (const rec of recs) {
+        const id = await dbSet("logs", v.id || null, rec);
+        if (!id) { b.disabled = false; if (ids.length) { saved = true; closeSheet(); toast("일부만 저장됐어요. 기록 목록을 확인해 주세요"); } return; }
+        ids.push(id);
+        for (const t of also) {
+          const r2 = {...clone(rec), tankId:t, created:Date.now()}; delete r2.photos; delete r2.aiTodo; delete r2.src;
+          if (r2.toTank === t) delete r2.toTank;
+          if (rec.type === "clean" && r2.pctAuto) { const vol = tankVolume(t)?.v; if (vol && num(r2.liters) != null) r2.pct = Math.min(100, Math.round(r2.liters / vol * 100)); else { delete r2.pct; delete r2.pctAuto; } }
+          await dbSet("logs", null, r2);
+        }
       }
+      b.disabled = false;
       saved = true; if (assets) removed.forEach(pid => assets.delete(pid).catch(() => {}));
       if (opt.remId) { const r = state.reminders.find(x => x.id === opt.remId); if (r) await completeRem(r); }
-      closeSheet(); toast(v.id ? "수정했어요" : also.length ? `어항 ${also.length + 1}곳에 기록했어요` : "기록했어요");
-      aiOnRecord(typeof id === "string" ? id : v.id, rec);
+      const total = recs.length * (also.length + 1);
+      closeSheet(); toast(v.id ? "수정했어요" : total > 1 ? `기록 ${total}건을 저장했어요${also.length ? ` (어항 ${also.length + 1}곳)` : ""}` : "기록했어요");
+      recs.forEach((rec, i) => aiOnRecord(typeof ids[i] === "string" ? ids[i] : v.id, rec));
     });
   });
 }
